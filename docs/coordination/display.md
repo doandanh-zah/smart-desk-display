@@ -10,6 +10,27 @@ Splash hiện tên thiết bị và trạng thái khởi động. Setup hiện t
 
 Toàn màn hình được xóa khi render lần đầu hoặc khi đổi view, mode đang hiển thị hoặc theme của mode có hỗ trợ. Các frame tiếp theo chỉ vẽ lại vùng có dữ liệu hiển thị thay đổi. Heatmap giữ 364 mức cũ để vẽ từng ô thay đổi trong một giao dịch SPI. Clock và Pomodoro thay từng ký tự trong dãy số khi chiều dài giữ nguyên, đồng hồ có vùng giây riêng. Thanh timer cập nhật theo số pixel chênh lệch. Renderer không cấp phát framebuffer.
 
+## 1.2.0 tiếp theo · palette TFT/preview và quota
+
+**Cho 04 và 06 kiểm chéo:** dùng chính xác các token dưới đây ở cả TFT và web preview. So cả hai theme tại 320×240, kiểm tra 5 mức trong legend và ô 0 so với thẻ. Các tọa độ GitHub, 24 tuần, bo 1 px và ZAH NFT giữ theo bảng bố cục bên dưới.
+
+| Token | Dark | Light |
+| --- | --- | --- |
+| Thẻ heatmap | `#161B22` | `#EAF0EB` |
+| Heatmap 0 → 4 | `#303A46` `#125638` `#21845A` `#42B978` `#8CF2AC` | `#CAD9CF` `#A6CDAE` `#6DAE82` `#368050` `#195C37` |
+| Nhấn lịch (ngày hôm nay) | `#42B978` | `#368050` |
+
+TFT giữ nền và chữ GitHub hiện tại. Số liệu quota giữ hai hàng y=77/137, phần trăm canh phải, reset ICT ở y+34. Footer trái y=213 dành cho trạng thái nguồn, phải cùng hàng dành cho `CREDIT`. Dòng y=226 giữ thời điểm mẫu. Hai hàng có nhãn `5H USAGE` và `7D USAGE`, với phần trăm đã dùng từ cửa sổ thật 300 và 10.080 phút. Số dùng phần trăm làm tròn và thanh dùng tỷ lệ đó. Nếu nguồn không gửi một cửa sổ, hàng tương ứng hiện `--`. Dữ liệu cửa sổ khác không gắn nhãn 5H hoặc 7D. Credit lấy từ nguồn thật, khi thiếu hiện `CREDIT N/A`.
+
+Interface để 02 nối: `QuotaWindow::windowMinutes` là độ dài thật (0 nếu thiếu). `QuotaData` có `creditAvailable`, `hasCredits`, `creditUnlimited`, `creditBalance[24]` và `resetCredits` (-1 nếu thiếu). Nguồn: `credit` và `resetCredits.availableCount` trong [remote-admin-contract.md](remote-admin-contract.md). Chuỗi số dư quá dài để hiển thị nên để trống và giữ cờ nguồn. Hai cửa sổ dùng `windowMinutes`, hoặc ID Claude `five_hour/seven_day` nếu thiếu phút. Mỗi hàng có `Reset --` khi chưa có timestamp. Footer `CREDIT N/A`/số dư/`UNLIMITED` và dòng dưới thêm `R: n` khi có reset credit; reset từng cửa sổ vẫn ở hàng riêng.
+
+### Xác minh palette và quota
+
+- Ảnh so sánh `.dev/display-check/palette-v2/compare.png` trên SSD gồm bốn canvas 320×240 cùng dữ liệu. Cột trái là bản trước, cột phải là bảng mới. Dark ở hàng trên, Light ở hàng dưới. Ô 0 tăng độ tách nền, mức cao nổi rõ, 24 tuần và mascot giữ nguyên.
+- Sau RGB565, các mức Dark có L* 23,5 / 31,6 / 49,5 / 67,9 / 88,2, nền thẻ L* 8,0. Light là 86,0 / 79,2 / 65,8 / 48,4 / 34,5, nền thẻ 95,4. Sáu mã RGB565 gồm nền và năm ô đều khác nhau trong mỗi theme. 06 kiểm chéo đạt parity cả hai theme, sprite ở 11 mốc và heatmap lịch web tại 390/1.440 px. Log `.dev/logs/display-clarity-rgb565.log` và `.dev/logs/integration-clarity-palette.log`.
+- Fixture host UBSan đạt với quota đảo thứ tự 7d trước 5h, hiển thị phần trăm đã dùng, reset ICT, credit số dư, unlimited, reset credit và thiếu cửa sổ. Hai mascot tiếp tục chỉ ghi vùng 48×48 khi đổi pose. Log `.dev/logs/display-clarity-host.log`.
+- Build ESP32 tích hợp qua `source .dev/env.sh` rồi `PLATFORMIO_BUILD_DIR="$SMART_DESK_DEV/display-modes-build" PLATFORMIO_LIBDEPS_DIR="$SMART_DESK_DEV/display-check/.pio/libdeps" pio run -d firmware -j 3`. Log `.dev/logs/display-clarity-build.log`. Bản này chưa nạp. Giá trị thực và latency production do session tích hợp xác minh riêng.
+
 ## GitHub · ZAH NFT và heatmap 24 tuần
 
 Ảnh phác chỉ định cấu trúc. GitHub dùng theme thiết bị, thẻ heatmap màu nền phụ và chữ dễ đọc trên canvas 320×240. Các tọa độ là góc trên trái, trừ tâm vòng tròn và mép phải được ghi riêng.
@@ -17,14 +38,14 @@ Toàn màn hình được xóa khi render lần đầu hoặc khi đổi view, m
 | Token | Dark | Light |
 | --- | --- | --- |
 | Nền | `#0E1716` | `#F3F7F2` |
-| Thẻ heatmap | `#172421` | `#E5EEE4` |
+| Thẻ heatmap | `#161B22` | `#EAF0EB` |
 | Đường phân cách | `#354D46` | `#BCCFC2` |
 | Chữ chính | `#EFF8F2` | `#142820` |
 | Chữ phụ | `#A5BEB4` | `#4B645A` |
 | Nhấn, streak và live | `#8DE1B5` | `#216441` |
 | Demo/cache | `#EAC47D` | `#784D14` |
 | Lỗi | `#FFACA5` | `#A42F2A` |
-| Heatmap 0 → 4 | `#161B22` `#16391A` `#346A35` `#529E4E` `#79D071` | `#D4E0D4` `#A2C7AA` `#77AE88` `#427D59` `#205237` |
+| Heatmap 0 → 4 | `#303A46` `#125638` `#21845A` `#42B978` `#8CF2AC` | `#CAD9CF` `#A6CDAE` `#6DAE82` `#368050` `#195C37` |
 | Nền avatar (cả hai theme) | `#F8DB6A` | `#F8DB6A` |
 
 | Thành phần | Tọa độ và nội dung |
@@ -40,9 +61,9 @@ Toàn màn hình được xóa khi render lần đầu hoặc khi đổi view, m
 Nguồn preview lấy `config.githubUsername`, `localEpoch` và trạng thái GitHub như trước. TFT nhận username cấu hình qua `Frame::configuredGitHubUsername`. Trình duyệt có thể dùng monospace sao cho bước cỡ 1 xấp xỉ 6 px và các dòng vừa hộp tên.
 
 
-### Palette từ ảnh legend · thông số cho 04
+### Palette lịch sử lấy mẫu từ ảnh legend
 
-Ảnh `.dev/references/github-dark-heatmap.png` 1432×292. Lấy màu giữa năm ô tại y=258, x=1170/1198/1226/1254/1282. Vùng 9×9 quanh mỗi tâm có cùng một màu với alpha FF. Dark dùng trực tiếp `#161B22 #16391A #346A35 #529E4E #79D071`, quy đổi RGB565 `10C4 11C3 3346 54E9 7E8E`. Light tiếp tục dùng palette nền sáng ở bảng trên để giữ thang tương phản. Legend và lưới dùng cùng token, bố cục 24 tuần và sprite ZAH NFT giữ theo các hàng trên.
+Ảnh `.dev/references/github-dark-heatmap.png` 1432×292. Lấy màu giữa năm ô tại y=258, x=1170/1198/1226/1254/1282. Vùng 9×9 quanh mỗi tâm có cùng một màu với alpha FF. Phiên bản trước dùng trực tiếp `#161B22 #16391A #346A35 #529E4E #79D071`, quy đổi RGB565 `10C4 11C3 3346 54E9 7E8E`. Light tiếp tục dùng palette nền sáng ở bảng trên để giữ thang tương phản. Legend và lưới dùng cùng token, bố cục 24 tuần và sprite ZAH NFT giữ theo các hàng trên.
 
 ### Sprite cho session 04
 

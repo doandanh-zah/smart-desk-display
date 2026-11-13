@@ -86,13 +86,13 @@ void DisplayManager::render(const Frame& frame) {
       {rgb565(0xEBEDF0), rgb565(0x9BE9A8), rgb565(0x40C463), rgb565(0x30A14E), rgb565(0x216E39)}};
 
   static constexpr Palette githubDark{
-      rgb565(0x0E1716), rgb565(0x172421), rgb565(0x354D46), rgb565(0xEFF8F2),
+      rgb565(0x0E1716), rgb565(0x161B22), rgb565(0x354D46), rgb565(0xEFF8F2),
       rgb565(0xA5BEB4), rgb565(0x8DE1B5), rgb565(0xEAC47D), rgb565(0xFFACA5),
-      {rgb565(0x161B22), rgb565(0x16391A), rgb565(0x346A35), rgb565(0x529E4E), rgb565(0x79D071)}};
+      {rgb565(0x303A46), rgb565(0x125638), rgb565(0x21845A), rgb565(0x42B978), rgb565(0x8CF2AC)}};
   static constexpr Palette githubLight{
-      rgb565(0xF3F7F2), rgb565(0xE5EEE4), rgb565(0xBCCFC2), rgb565(0x142820),
+      rgb565(0xF3F7F2), rgb565(0xEAF0EB), rgb565(0xBCCFC2), rgb565(0x142820),
       rgb565(0x4B645A), rgb565(0x216441), rgb565(0x784D14), rgb565(0xA42F2A),
-      {rgb565(0xD4E0D4), rgb565(0xA2C7AA), rgb565(0x77AE88), rgb565(0x427D59), rgb565(0x205237)}};
+      {rgb565(0xCAD9CF), rgb565(0xA6CDAE), rgb565(0x6DAE82), rgb565(0x368050), rgb565(0x195C37)}};
 
   const bool isGitHub = frame.view == View::Content && frame.mode == Mode::GitHub;
   fresh_ = !drawn_ || frame.view != view_ || frame.theme != theme_ ||

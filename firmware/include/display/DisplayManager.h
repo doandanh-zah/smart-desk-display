@@ -75,6 +75,7 @@ struct QuotaWindow {
   char label[21]{};
   int16_t usedPercent = -1;
   uint64_t resetEpochSeconds = 0;
+  uint32_t windowMinutes = 0;  // 0 when absent
 };
 
 struct QuotaData {
@@ -82,6 +83,11 @@ struct QuotaData {
   uint64_t updatedAt = 0;
   uint8_t count = 0;
   QuotaWindow windows[2]{};
+  char creditBalance[24]{};
+  bool creditAvailable = false;
+  bool hasCredits = false;
+  bool creditUnlimited = false;
+  int32_t resetCredits = -1;  // -1 when absent
 };
 
 struct Frame {
@@ -158,7 +164,8 @@ class DisplayManager {
   uint32_t petCycleAt_ = 0;
   uint8_t petPose_ = 0;
   char calendarDay_[11]{};
-  char quotaLabels_[2][49]{}, quotaPercents_[2][49]{}, quotaResets_[2][49]{};
+  char quotaCredit_[49]{};
+  char quotaPercents_[2][49]{}, quotaResets_[2][49]{};
   int16_t quotaWidths_[2]{};
   GitHubState githubState_ = GitHubState::Loading;
   int16_t progressWidth_ = -1;

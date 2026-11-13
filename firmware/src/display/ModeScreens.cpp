@@ -76,6 +76,16 @@ void formatIct(char* out, size_t size, uint64_t epoch, const char* format) {
   std::snprintf(out, size, "--");
 }
 
+const QuotaWindow* findQuotaWindow(const QuotaData* data, uint32_t minutes, const char* id) {
+  if (!data || !hasSnapshot(data->state)) return nullptr;
+  for (unsigned index = 0; index < data->count && index < 2; ++index) {
+    const QuotaWindow& window = data->windows[index];
+    if (window.windowMinutes == minutes ||
+        (!window.windowMinutes && std::strcmp(window.label, id) == 0)) return &window;
+  }
+  return nullptr;
+}
+
 }  // namespace
 
 void DisplayManager::clock(const Frame& frame) {
@@ -95,6 +105,7 @@ void DisplayManager::clock(const Frame& frame) {
     std::snprintf(date, sizeof(date), "%04u-%02u-%02u", unsigned(data.year % 10000),
                   unsigned(data.month), unsigned(data.day));
   }
+  const uint16_t calendarAccent = rgb565(theme_ == Theme::Light ? 0x368050 : 0x42B978);
   const bool redrawMonth = fresh_ || std::strcmp(calendarDay_, date) != 0;
   if (redrawMonth) {
     std::strcpy(calendarDay_, date);
@@ -112,7 +123,7 @@ void DisplayManager::clock(const Frame& frame) {
         const int16_t x = 160 + cell % 7 * 19;
         const int16_t y = 109 + cell / 7 * 12;
         const bool today = day == data.day;
-        if (today) tft_.fillRoundRect(x, y - 1, 17, 10, 2, palette_->accent);
+        if (today) tft_.fillRoundRect(x, y - 1, 17, 10, 2, calendarAccent);
         char number[4];
         std::snprintf(number, sizeof(number), "%u", day);
         drawText(number, std::strlen(number), x, y, 17, 1,
@@ -189,28 +200,32 @@ void DisplayManager::quota(const QuotaData* data, bool claude) {
     drawText("SUBSCRIPTION USAGE", 18, 85, 46, 219, 1, accent, Alignment::Left);
     tft_.drawFastHLine(Left, 68, BodyWidth, palette_->border);
     tft_.drawFastHLine(Left, 202, BodyWidth, palette_->border);
+    drawText("5H USAGE", 8, Left, 77, 198, 1, palette_->muted, Alignment::Left);
+    drawText("7D USAGE", 8, Left, 137, 198, 1, palette_->muted, Alignment::Left);
   }
   quotaPet(claude, millis());
 
   const SourceState state = data ? data->state : SourceState::NotConnected;
-  const uint8_t count = data && hasSnapshot(state) ? (data->count > 2 ? 2 : data->count) : 0;
+  const bool hasData = hasSnapshot(state);
+  const QuotaWindow* windows[] = {findQuotaWindow(data, 300, "five_hour"),
+                                  findQuotaWindow(data, 10080, "seven_day")};
   for (int i = 0; i < 2; ++i) {
-    const QuotaWindow* window = i < count ? &data->windows[i] : nullptr;
+    const QuotaWindow* window = windows[i];
     const int16_t y = 77 + i * 60;
     const int16_t used = window ? window->usedPercent : -1;
+    const bool known = used >= 0 && used <= 100;
     char percent[8] = "--";
-    if (used >= 0 && used <= 100) std::snprintf(percent, sizeof(percent), "%d%%", int(used));
-    const char* fallback = i == 0 ? "WINDOW 1" : "WINDOW 2";
-    field(quotaLabels_[i], window && window->label[0] ? window->label : fallback,
-          Left, y, 198, 1, palette_->muted);
+    if (known) {
+      std::snprintf(percent, sizeof(percent), "%d%%", int(used));
+    }
     field(quotaPercents_[i], percent, 220, y, 84, 2, accent, Alignment::Right);
-    const int16_t filled = used >= 0 && used <= 100 ? used * BodyWidth / 100 : 0;
+    const int16_t filled = known ? used * BodyWidth / 100 : 0;
     if (fresh_ || filled != quotaWidths_[i]) {
       tft_.fillRect(Left, y + 20, BodyWidth, 6, palette_->surface);
       if (filled) tft_.fillRect(Left, y + 20, filled, 6, accent);
       quotaWidths_[i] = filled;
     }
-    char reset[32] = "";
+    char reset[32] = "Reset --";
     if (window && window->resetEpochSeconds) {
       formatIct(reset, sizeof(reset), window->resetEpochSeconds, "Reset %m-%d %H:%M ICT");
     }
@@ -219,10 +234,23 @@ void DisplayManager::quota(const QuotaData* data, bool claude) {
 
   const uint16_t statusColor = state == SourceState::Stale ? palette_->warning :
                                state == SourceState::Error ? palette_->error : palette_->muted;
-  field(footer_, sourceLabel(state), Left, 213, BodyWidth, 1, statusColor);
-  char updated[32] = "";
-  if (data && hasSnapshot(state) && data->updatedAt) {
+  field(footer_, sourceLabel(state), Left, 213, 120, 1, statusColor);
+  char credit[30] = "CREDIT N/A";
+  if (hasData && data->creditAvailable) {
+    const char* balance = data->creditBalance;
+    if (data->creditUnlimited) balance = "UNLIMITED";
+    else if (!balance[0] || std::strlen(balance) > 20) balance = data->hasCredits ? "AVAILABLE" : "NONE";
+    std::snprintf(credit, sizeof(credit), "CREDIT %.20s", balance);
+  }
+  field(quotaCredit_, credit, 136, 213, 168, 1, palette_->muted, Alignment::Right);
+  char updated[49] = "";
+  if (hasData && data->updatedAt) {
     formatIct(updated, sizeof(updated), data->updatedAt, "Updated %m-%d %H:%M ICT");
+  }
+  if (hasData && data->resetCredits >= 0) {
+    const size_t length = std::strlen(updated);
+    std::snprintf(updated + length, sizeof(updated) - length, "%sR: %ld",
+                  length ? " / " : "", static_cast<long>(data->resetCredits));
   }
   field(detail_, updated, Left, 226, BodyWidth, 1, palette_->muted);
 }
