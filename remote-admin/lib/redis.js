@@ -115,14 +115,6 @@ redis.call('DEL', KEYS[1], KEYS[2])
 return raw
 `;
 
-const STORE_QUOTA = `
-local raw = redis.call('GET', KEYS[1])
-if not raw or cjson.decode(raw).observedAt <= tonumber(ARGV[1]) then
-  redis.call('SET', KEYS[1], ARGV[2], 'EX', 86400)
-end
-return 1
-`;
-
 export function store(exec) {
   const evalScript = (script, keys, args) => exec('EVAL', script, keys.length, ...keys, ...args);
   const commandKey = (id) => key('command:') + id;
@@ -157,18 +149,14 @@ export function store(exec) {
       const raw = await evalScript(TAKE_OAUTH_STATE, [key('calendar:oauth-state:') + id], [nonce]);
       return raw ? JSON.parse(raw) : null;
     },
-    async integrationSamples() {
-      const [calendar, codex, claude] = await exec('MGET', key('calendar'), key('quota:codex'), key('quota:claude'));
-      return { calendar: JSON.parse(calendar), codex: JSON.parse(codex), claude: JSON.parse(claude) };
+    async calendarSample() {
+      return JSON.parse(await exec('GET', key('calendar')));
     },
     async claimCalendarRefresh() {
       return await exec('SET', key('calendar:refresh'), '1', 'NX', 'EX', 60) === 'OK';
     },
     async putCalendar(sample) {
       await exec('SET', key('calendar'), JSON.stringify(sample), 'EX', 3600);
-    },
-    async putQuota(provider, sample) {
-      await evalScript(STORE_QUOTA, [key('quota:') + provider], [sample.observedAt, JSON.stringify(sample)]);
     },
     async state(now, interactive = false) {
       const day = Math.floor(now / 86400);

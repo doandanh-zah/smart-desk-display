@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CALENDAR_SCOPE, googleCalendar, integrations, minimalEvents, normalizeQuota, quotaView } from '../lib/integrations.js';
-import { claudeSample } from '../scripts/quota-bridge.mjs';
+import { CALENDAR_SCOPE, googleCalendar, integrations, minimalEvents } from '../lib/integrations.js';
 import { commandPayload } from '../lib/validate.js';
 
 const time = Date.parse('2026-11-13T04:00:00Z') / 1000;
@@ -53,7 +52,7 @@ test('calendar device export is opt-in and expired snapshots do not appear', asy
     { title: 'Old', start: time - 2, end: time - 1, allDay: false },
     { title: 'Next', start: time + 1, end: future, allDay: false },
   ] };
-  const db = { integrationSamples: async () => ({ calendar: cached }), claimCalendarRefresh: async () => false };
+  const db = { calendarSample: async () => cached, claimCalendarRefresh: async () => false };
   const noExport = integrations(db, { env: {}, fetchCalendar: async () => [] });
   assert.equal((await noExport(time, true)).calendar.state, 'unavailable');
   const browser = (await noExport(time)).calendar;
@@ -62,27 +61,13 @@ test('calendar device export is opt-in and expired snapshots do not appear', asy
   assert.equal((await noExport(time + 3600)).calendar.state, 'unavailable');
 });
 
-test('Claude uses only subscription windows and quota states expire without fabricated values', () => {
-  const sample = claudeSample({
-    rate_limits: {
-      five_hour: { used_percentage: 23.5, resets_at: future },
-      seven_day: { used_percentage: 41, resets_at: time - 1 },
-      spend_limit: { used_percentage: 96, used_usd: 99 },
-    },
-    context_window: { used_percentage: 92 },
-  }, time);
-  assert.equal(sample.windows.length, 1);
-  assert.equal(sample.windows[0].usedPercent, 23.5);
-  assert.equal(sample.windows[0].used, null);
-  assert.equal(quotaView('claude', sample, time + 901).state, 'stale');
-  assert.equal(quotaView('claude', sample, time + 86400).state, 'unavailable');
-  assert.equal(quotaView('codex', normalizeQuota('codex', { state: 'unsupported', observedAt: time, windows: [] }), time).state, 'unsupported');
-});
-
 test('new countdown commands use the same bounded cloud allowlist as LAN', () => {
   const input = { action: 'configure', kind: 'target', targetEpochSeconds: future };
   assert.deepEqual(commandPayload('countdown', input), input);
   assert.equal(commandPayload('countdown', { ...input, durationSeconds: 60 }), null);
   assert.equal(commandPayload('countdown', { action: 'configure', kind: 'duration', durationSeconds: 360000 }), null);
-  assert.deepEqual(commandPayload('display', { mode: 'claude' }), { mode: 'claude' });
+  for (const mode of ['codex', 'claude']) {
+    assert.equal(commandPayload('display', { mode }), null);
+    assert.equal(commandPayload('config', { rotation: { enabled: true, intervalSeconds: 60, modes: ['github', mode] } }), null);
+  }
 });

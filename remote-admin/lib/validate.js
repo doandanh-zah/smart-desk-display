@@ -1,7 +1,8 @@
 export const ID = /^[a-f0-9]{32}$/;
 export const TOKEN = /^[a-f0-9]{64}$/;
 const CODE = /^[a-z0-9_]{1,48}$/;
-const MODES = ['github', 'clock', 'stats', 'pomodoro', 'message', 'countdown', 'codex', 'claude'];
+const CONTROL_MODES = ['github', 'clock', 'stats', 'pomodoro', 'message', 'countdown'];
+const MODES = [...CONTROL_MODES, 'codex', 'claude'];
 const THEMES = ['dark', 'light'];
 const ALIGNMENTS = ['left', 'center', 'right'];
 
@@ -22,17 +23,17 @@ function message(value) {
   return { text: value.text, alignment: value.alignment, color: value.color.toUpperCase(), size: value.size };
 }
 
-function rotation(value) {
+function rotation(value, modes = MODES) {
   if (!keys(value, ['enabled', 'intervalSeconds', 'modes']) || !flag(value.enabled) ||
       !integer(value.intervalSeconds, 30, 600) || !Array.isArray(value.modes) ||
       value.modes.length < (value.enabled ? 2 : 1) || value.modes.length > 5 ||
-      !value.modes.every((mode) => MODES.includes(mode)) ||
+      !value.modes.every((mode) => modes.includes(mode)) ||
       new Set(value.modes).size !== value.modes.length) return null;
   return { enabled: value.enabled, intervalSeconds: value.intervalSeconds, modes: value.modes };
 }
 
 export function commandPayload(type, payload) {
-  if (type === 'display' && keys(payload, ['mode']) && MODES.includes(payload.mode)) {
+  if (type === 'display' && keys(payload, ['mode']) && CONTROL_MODES.includes(payload.mode)) {
     return { mode: payload.mode };
   }
   if (type === 'countdown') {
@@ -65,7 +66,7 @@ export function commandPayload(type, payload) {
     config.clockShowSeconds = payload.clockShowSeconds;
   }
   if (Object.hasOwn(payload, 'rotation')) {
-    config.rotation = rotation(payload.rotation);
+    config.rotation = rotation(payload.rotation, CONTROL_MODES);
     if (!config.rotation) return null;
   }
   return config;

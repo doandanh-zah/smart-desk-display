@@ -64,7 +64,6 @@ before(async () => {
 
   env = {
     ADMIN_PASSWORD_HASH: await passwordHash(password), DEVICE_TOKEN_SHA256: sha256(token),
-    CODEX_BRIDGE_TOKEN_SHA256: sha256(bridgeToken),
     UPSTASH_REDIS_REST_URL: 'https://local-redis.test', UPSTASH_REDIS_REST_TOKEN: 'fixture-storage-token',
   };
   app = gateway();
@@ -221,21 +220,16 @@ test('device snapshot, scoped credentials, replay, allowlist, durable queue and 
   assert.equal((await (await state()).json()).connection, 'offline');
 });
 
-test('quota bridge and optional device projection enforce scoped credentials and freshness', async () => {
-  const path = '/api/bridge/quota/codex';
-  const sample = { observedAt: now, state: 'live', windows: [{
-    id: 'primary', usedPercent: 23, windowMinutes: 300, resetsAt: now + 100,
-    limit: 1000, unit: 'invented',
-  }] };
-  const bridge = (bearer, data, providerPath = path) => app(request(providerPath, {
-    data, headers: { authorization: 'Bearer ' + bearer },
-  }));
-  await expectError(await bridge(token, sample), 401, 'unauthorized');
-  await expectError(await bridge(bridgeToken, sample, '/api/bridge/quota/claude'), 401, 'unauthorized');
-  await expectError(await bridge(bridgeToken, { ...sample, observedAt: now - 91 }), 400, 'invalid_field');
-  assert.equal((await bridge(bridgeToken, sample)).status, 200);
-  assert.equal((await bridge(bridgeToken, { ...sample, observedAt: now - 1,
-    windows: [{ ...sample.windows[0], usedPercent: 10 }] })).status, 200);
+test('retired quota bridges reject uploads and old clients still receive Calendar', async () => {
+  const legacyEnv = { ...env, CODEX_BRIDGE_TOKEN_SHA256: sha256(bridgeToken), CLAUDE_BRIDGE_TOKEN_SHA256: sha256(bridgeToken) };
+  const legacyGateway = gateway(legacyEnv);
+  for (const provider of ['codex', 'claude']) {
+    const response = await legacyGateway(request('/api/bridge/quota/' + provider, {
+      data: {}, headers: { authorization: 'Bearer ' + bridgeToken },
+    }));
+    await expectError(response, 404, 'not_found');
+    await cli('SET', 'smart-desk:remote:v1:quota:' + provider, '{}', 'EX', 86400);
+  }
   await expectError(await app(request('/api/admin/integrations')), 401, 'unauthorized');
   const admin = await login('203.0.113.12');
   const fromAdmin = await (await app(request('/api/admin/integrations', { headers: admin }))).json();
@@ -243,11 +237,12 @@ test('quota bridge and optional device projection enforce scoped credentials and
   const fromDevice = (await (await sync({ wantIntegrations: true })).json()).integrations;
   assert.deepEqual(fromAdmin, fromDevice);
   assert.equal(fromDevice.calendar.state, 'unavailable');
-  assert.equal(fromDevice.quotas.codex.windows[0].usedPercent, 23);
-  assert.equal(fromDevice.quotas.codex.windows[0].limit, null);
-  now += 101;
-  const stale = (await (await sync({ wantIntegrations: true })).json()).integrations;
-  assert.equal(stale.quotas.codex.state, 'stale');
+  for (const provider of ['codex', 'claude']) {
+    const slot = fromDevice.quotas[provider];
+    assert.equal(slot.state, 'unavailable');
+    assert.deepEqual(slot.windows, []);
+    assert.equal(slot.observedAt, null);
+  }
 });
 
 test('six-digit PIN preserves leading zero and shares per-IP and global Redis limits', async () => {

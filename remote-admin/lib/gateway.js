@@ -1,5 +1,5 @@
 import { calendarOAuth } from './calendar-oauth.js';
-import { googleCalendar, integrations, normalizeQuota } from './integrations.js';
+import { googleCalendar, integrations } from './integrations.js';
 import { isIP } from 'node:net';
 import { redisClient, store } from './redis.js';
 import { commandPayload, ID, keys, syncRequest, TOKEN } from './validate.js';
@@ -197,21 +197,6 @@ export function createGateway({ env = process.env, storage, assets, waitUntil, f
         else if (result.pollAfterMs === 3000) output.pollAfterMs = 3000;
         if (input.wantIntegrations) output.integrations = await integrationView(time, true);
         return json(output);
-      }
-
-      const provider = path.match(/^\/api\/bridge\/quota\/(codex|claude)$/)?.[1];
-      if (provider) {
-        requireMethod(request, 'POST');
-        if (request.headers.has('origin')) fail(403, 'forbidden');
-        const hash = env[provider === 'codex' ? 'CODEX_BRIDGE_TOKEN_SHA256' : 'CLAUDE_BRIDGE_TOKEN_SHA256'];
-        const auth = request.headers.get('authorization') ?? '';
-        const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-        if (!TOKEN.test(hash ?? '') || !TOKEN.test(token) || !safeEquals(sha256(token), hash)) fail(401, 'unauthorized');
-        limitOrThrow(await db.limit('quota:' + provider, 60), 6);
-        const sample = normalizeQuota(provider, await body(request, 1024));
-        if (!sample || Math.abs(time - sample.observedAt) > 90) fail(400, 'invalid_field');
-        await db.putQuota(provider, sample);
-        return json({ ok: true });
       }
 
       if (path === '/api/auth/login') {

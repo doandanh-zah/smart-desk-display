@@ -1,60 +1,12 @@
 const TIME_ZONE = 'Asia/Ho_Chi_Minh';
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events.owned.readonly';
-const quotaSources = { codex: 'codex_app_server', claude: 'claude_code_statusline' };
-const quotaWindows = { codex: ['primary', 'secondary'], claude: ['five_hour', 'seven_day'] };
-const quotas = ['codex', 'claude'];
 const validSeconds = (value) => Number.isInteger(value) && value > 0 && value < 4102444800;
 
-export function codexCredits(bucket, resets, now) {
-  const c = bucket?.credits;
-  const credit = typeof c?.hasCredits === 'boolean' && typeof c.unlimited === 'boolean'
-    ? { balance: typeof c.balance === 'string' && /^[0-9]{1,18}(?:\.[0-9]{1,8})?$/.test(c.balance) ? c.balance : null,
-      unit: 'credits', hasCredits: c.hasCredits, unlimited: c.unlimited, resetsAt: null } : null;
-  const dates = Array.isArray(resets?.credits) ? resets.credits
-    .filter((row) => row.status === 'available' && validSeconds(row.expiresAt) && row.expiresAt > now)
-    .map((row) => row.expiresAt) : [];
-  const resetCredits = Number.isInteger(resets?.availableCount) && resets.availableCount >= 0 && resets.availableCount <= 65535
-    ? { availableCount: resets.availableCount, expiresAt: dates.length ? Math.min(...dates) : null } : null;
-  return { credit, resetCredits };
-}
-
-export function normalizeQuota(provider, sample) {
-  if (!quotas.includes(provider) || !sample ||
-      !validSeconds(sample.observedAt) || !Array.isArray(sample.windows) || sample.windows.length > 2 ||
-      !['live', 'unsupported', 'unavailable'].includes(sample.state)) return null;
-  const ids = new Set();
-  const windows = [];
-  for (const entry of sample.windows) {
-    if (!entry || !quotaWindows[provider].includes(entry.id) || ids.has(entry.id) ||
-        !Number.isFinite(entry.usedPercent) || entry.usedPercent < 0 || entry.usedPercent > 100 ||
-        (entry.resetsAt !== null && !validSeconds(entry.resetsAt)) ||
-        (entry.windowMinutes !== null && (!Number.isInteger(entry.windowMinutes) ||
-          entry.windowMinutes <= 0 || entry.windowMinutes > 525600))) return null;
-    ids.add(entry.id);
-    windows.push({ id: entry.id, windowMinutes: entry.windowMinutes, resetsAt: entry.resetsAt,
-      usedPercent: entry.usedPercent, used: null, limit: null, unit: null });
-  }
-  const extra = provider === 'codex' ? codexCredits({ credits: sample.credit }, sample.resetCredits, sample.observedAt)
-    : { credit: null, resetCredits: null };
-  if (extra.resetCredits && validSeconds(sample.resetCredits.expiresAt) &&
-      sample.resetCredits.expiresAt > sample.observedAt) extra.resetCredits.expiresAt = sample.resetCredits.expiresAt;
-  if ((sample.state === 'live') !== Boolean(windows.length || extra.credit || extra.resetCredits)) return null;
-  return { source: quotaSources[provider], kind: 'subscription', state: sample.state,
-    observedAt: sample.observedAt, windows, ...extra };
-}
-
-export function quotaView(provider, sample, now) {
-  const quota = normalizeQuota(provider, sample);
-  if (!quota || now - quota.observedAt >= 86400) {
-    return { source: quotaSources[provider], kind: 'subscription', state: 'unavailable', observedAt: null, windows: [], credit: null, resetCredits: null };
-  }
-  if (quota.state === 'live' && (now - quota.observedAt > 900 ||
-      quota.windows.some((window) => window.resetsAt !== null && window.resetsAt <= now) ||
-      (quota.resetCredits?.expiresAt != null && quota.resetCredits.expiresAt <= now))) {
-    quota.state = 'stale';
-  }
-  return quota;
-}
+// Older dashboards and firmware require both slots to read Calendar.
+const retiredQuotas = {
+  codex: { source: 'codex_app_server', kind: 'subscription', state: 'unavailable', observedAt: null, windows: [], credit: null, resetCredits: null },
+  claude: { source: 'claude_code_statusline', kind: 'subscription', state: 'unavailable', observedAt: null, windows: [], credit: null, resetCredits: null },
+};
 
 function dateTime(value, zone) {
   if (typeof value?.dateTime === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(value.dateTime)) {
@@ -153,14 +105,8 @@ export function integrations(db, { env, fetchCalendar = googleCalendar(env), wai
   return async function view(now, device = false) {
     const connection = calendarConnection ? await calendarConnection().catch(() => null) : null;
     const exposeCalendar = (!calendarConnection || connection?.connected) && Boolean(fetchCalendar) && (!device || env.GOOGLE_CALENDAR_DEVICE_EXPORT === '1');
-    let samples;
-    try {
-      samples = await db.integrationSamples();
-    } catch {
-      samples = {};
-    }
+    const cached = exposeCalendar ? await db.calendarSample().catch(() => null) : null;
     let calendar = calendarUnavailable;
-    const cached = samples.calendar;
     if (exposeCalendar && (!connection || connection.revision === cached?.revision) && validSeconds(cached?.observedAt) && now - cached.observedAt < 3600 && Array.isArray(cached.events)) {
       calendar = { ...calendarUnavailable, observedAt: cached.observedAt,
         state: now - cached.observedAt < 300 ? 'live' : 'stale',
@@ -182,8 +128,6 @@ export function integrations(db, { env, fetchCalendar = googleCalendar(env), wai
       }
     }
     if (!device && calendarConnection) calendar = { ...calendar, canConnect: true, connected: Boolean(connection?.connected) };
-    return { v: 1, calendar, quotas: {
-      codex: quotaView('codex', samples.codex, now), claude: quotaView('claude', samples.claude, now),
-    } };
+    return { v: 1, calendar, quotas: retiredQuotas };
   };
 }

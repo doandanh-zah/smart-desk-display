@@ -88,3 +88,8 @@
 
 - Bật `GOOGLE_CALENDAR_DEVICE_EXPORT=1` trong Vercel Production theo yêu cầu hiển thị lịch trên TFT. Triển khai lại bundle `9f5313c`. [Deployment READY](https://vercel.com/lilzahs-projects/smart-desk-remote-admin/xBigNWeuyqtKw3AJ1X8AfaHx5mGe).
 - Smoke active 11/11. LAN `/api/calendar` của ESP32 1.2.1 chuyển sang `live` và nhận một sự kiện Google Calendar lúc 16:41:57 ICT. Chỉ xác minh trạng thái và số sự kiện, chưa đối chiếu hiển thị vật lý.
+
+
+## Ngừng đồng bộ quota Codex và Claude
+
+- Đã gỡ LaunchAgent `space.thezah.smartdesk.codex-quota` khỏi phiên macOS và khỏi thư mục khởi chạy khi đăng nhập. Gateway gỡ route upload và ngừng đọc quota trong Redis. Hai slot rỗng trong projection v1 giúp firmware cũ tiếp tục đọc Google Calendar trong lúc chuyển bản.

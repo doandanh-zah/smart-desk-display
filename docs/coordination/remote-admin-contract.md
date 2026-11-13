@@ -52,7 +52,7 @@ Poll mỗi 20 giây khi có Wi-Fi, tăng backoff khi lỗi. Dùng `expiresAt` v�
 
 Production yêu cầu Redis bền vững, hash mật khẩu, hash device token và origin canonical. Thiếu cấu hình, web chỉ hiện thông báo chưa thiết lập và API trả 503 `setup_required`. Không có mật khẩu mặc định.
 
-## Dữ liệu Calendar và quota v1
+## Dữ liệu Calendar v1
 
 Dùng `GET /api/admin/integrations` với cookie admin, JSON no-store. ESP32 đọc cùng projection qua trường tùy chọn `integrations` trong response `POST /api/device/sync` sau xác thực bearer, nếu request có `wantIntegrations:true`. Hai payload dùng chung schema. Browser và thiết bị phải chấp nhận response cũ chưa có trường này. Cấu hình OAuth và gửi dữ liệu bridge chỉ qua server hoặc CLI local của chủ tài khoản.
 
@@ -75,13 +75,10 @@ Dùng `GET /api/admin/integrations` với cookie admin, JSON no-store. ESP32 đ�
 
 - `state` là `live`, `stale`, `unavailable`, hoặc `unsupported`. `observedAt` là Unix giây UTC của mẫu cuối, hoặc null. Khi chưa cấu hình/không đọc được nguồn và chưa có mẫu, trả unavailable với mảng rỗng. Unsupported chỉ dùng khi nguồn xác nhận chế độ xác thực không thuộc subscription hoặc không cung cấp loại quota. Với mẫu cũ, UI hiện stale và tuổi dữ liệu. Không suy ra số 0 khi thiếu dữ liệu.
 - Calendar lấy lịch chính trong 48 giờ tới, tối đa 3 sự kiện đang diễn ra hoặc sắp bắt đầu. Mỗi event có `title` (tối đa 64 byte UTF-8, generic nếu sự kiện private/confidential), `start`, `end` (Unix giây UTC, end exclusive) và `allDay` (boolean). Giờ all-day là nửa đêm theo timezone lịch gốc. Không lấy mô tả, khách mời, địa chỉ, link hoặc ID. Chỉ gửi tiêu đề/thời điểm đến thiết bị đã ghép nếu chủ tài khoản chủ động bật xuất Calendar tới ESP32. TFT có thể dùng nhãn ASCII generic nếu chưa có font tương ứng.
-- Mỗi phần tử `windows` có `id`, `windowMinutes` (số nguyên dương hoặc null), `resetsAt` (Unix giây hoặc null), `usedPercent` (0–100 hoặc null), `used`, `limit` (số hoặc null), `unit` (chuỗi hoặc null). Codex giữ tối đa 2 cửa sổ `primary` và `secondary` của bucket `codex`. Claude giữ tối đa 2 cửa sổ `five_hour`, `seven_day` từ trường rate_limits chính thức. Không trộn API/organization usage, credits mua thêm, spend limit, context usage hoặc số tin nhắn ước tính. Với hai nguồn v1, các trường số tuyệt đối và đơn vị là null.
-- Calendar làm mới khoảng 5 phút, giữ mẫu lỗi tối đa 1 giờ, luôn lọc sự kiện đã kết thúc. Quota quá 15 phút hoặc có cửa sổ đã đến hạn reset hiển thị stale, hết lưu sau 24 giờ. Không đặt lại phần trăm từ đồng hồ local.
+- Calendar làm mới khoảng 5 phút, giữ mẫu lỗi tối đa 1 giờ và lọc sự kiện đã kết thúc.
+- Projection v1 giữ hai slot `quotas` rỗng với trạng thái `unavailable` để firmware cũ vẫn đọc lịch. Gateway đã ngừng nhận mẫu quota. Các mode cũ vẫn hợp lệ trong snapshot thiết bị, trong khi lệnh điều khiển chỉ nhận các mode hiện hành.
 
-Bridge local dùng `POST /api/bridge/quota/codex` hoặc `/claude`, bearer riêng 64 hex, server nhận hash riêng từng nguồn. Không dùng cookie admin, device credential, hay credential nhà cung cấp. Chỉ gửi mẫu quota đã lọc.
+## Phản hồi lệnh nhanh và Google OAuth
 
-## Quota bổ sung và phản hồi lệnh nhanh
-
-- Quota có thêm `credit` và `resetCredits` tùy chọn, consumer cũ bỏ qua. `credit` là `null` hoặc `{"balance":"12.5","unit":"credits","hasCredits":true,"unlimited":false,"resetsAt":null}` do Codex App Server `credits` cung cấp. `balance` là chuỗi thập phân gốc hoặc null. `resetCredits` là null hoặc `{"availableCount":2,"expiresAt":null}`; chỉ lấy số lần reset được cấp từ `rateLimitResetCredits` và ngày hết hạn sớm nhất trong danh sách còn hiệu lực nếu có. Thời điểm reset quota vẫn nằm riêng trong từng cửa sổ. Claude Code status line chỉ cung cấp cửa sổ subscription, credit và reset credit giữ null.
 - Admin state GET có thể gửi `X-Desk-Interactive: 1` khi tab đang hiển thị. Gateway gia hạn lease tối đa 120 giây khi có thiết bị được thấy trong 75 giây qua, tối đa 30 phút poll nhanh tích lũy trong mỗi ngày UTC. Firmware hỗ trợ nhịp idle 60 giây gửi `pollHints:true` trong mọi sync. Phản hồi device sync có trường tùy chọn `pollAfterMs` (3000 trong lease hoặc 60000 ở idle nếu client đã gửi `pollHints:true`; bỏ field ở idle cho client cũ để giữ mặc định 20000). Firmware dùng giá trị server đã clamp, tiếp tục ACK nhanh và backoff khi lỗi. Gateway ghi `deliveredAtMs` và `acknowledgedAtMs` trong view admin, cùng `queuedAtMs`; thiết bị vẫn nhận command cũ đúng năm field.
 - OAuth Calendar: `POST /api/admin/calendar/connect` dùng cookie admin + CSRF và trả `{ok:true,authorizationUrl}`. Browser điều hướng top-level đến URL Google. Callback canonical `GET /api/auth/google/callback` dùng state một lần liên kết phiên admin và cookie callback riêng Lax; cookie admin vẫn Strict. `POST /api/admin/calendar/disconnect` yêu cầu CSRF để xóa liên kết. Trường `calendar.canConnect` và `calendar.connected` trong view admin cho phép hiện nút phù hợp.
