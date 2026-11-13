@@ -448,3 +448,24 @@ nạp. Bộ lệnh chuẩn bị cục bộ ở
   và chọn Wi-Fi 2,4 GHz khả dụng. Sau đó xác minh phiên bản qua API,
   heartbeat Production và quan sát trực tiếp tiêu đề lịch trên TFT.
   Log `.dev/logs/hardware-calendar-wifi-1.2.2-{identify,flash,boot}.log`.
+
+## Rollout 1.2.3 · hàng sự kiện Đồng hồ + Lịch
+
+- Firmware và LittleFS từ bản trích xuất sạch của commit
+  `bfc1a6f4d8e3d11313e3a96aea779a1281a21ccb`. Đối chiếu nguồn firmware/web
+  với Git, kiểm SHA-256 và giải nén LittleFS đối chiếu sáu asset.
+  Firmware `5f3d3d3e6f119618e18c3fb4289166076b64d6141fa2365800f490dc8966796a`.
+  LittleFS `294a264298ac9400b4704cbda53327c83a512367d9c371b2f2620c212a881dad`.
+- Trước nạp, xác định IP mới `192.168.34.38` qua MAC đã biết. ESP32 1.2.2
+  đã vào Wi-Fi và cả Pomodoro/Countdown đều idle. Esptool nhận đúng MAC
+  đuôi `94:60`, ghi app và LittleFS tại `0x10000` và `0x210000` ở
+  460800 baud. Hai digest đều đạt. NVS được giữ, serial đã nhả.
+- Sau boot, LAN `http://192.168.34.38/` báo firmware 1.2.3, tự kết nối
+  lại Wi-Fi, đồng bộ UTC+7 và GitHub ở trạng thái live. Config LAN khớp
+  toàn bộ trước/sau, provisioning tắt. Cả sáu asset qua LAN khớp byte với
+  nguồn, strict HTTP và kiểm API mode v2 đạt. Calendar live với một sự
+  kiện tại thời điểm đo, xác nhận dữ liệu cloud đã về thiết bị.
+- Kết quả fixture kiểm tra hàng giờ/tiêu đề trải ngang và bỏ nhãn
+  `CALENDAR LIVE`. TFT chưa được quan sát trực tiếp trong lần nạp này.
+  Mode đang ở GitHub. Người dùng chọn Đồng hồ + Lịch để đối chiếu.
+  Log `.dev/logs/hardware-1.2.3-{flash,lan}.log`.
