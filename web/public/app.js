@@ -208,7 +208,7 @@ function renderPreview(timer) {
   } else if (mode === "solana") {
     frame.walletAddress = byId("wallet-address").value;
     frame.walletQr = document.querySelector(".wallet-qr").src;
-    caption = "dsuc.sol · Solana Devnet";
+    caption = "dsuc.sol · Địa chỉ nhận Solana";
   } else if (mode === "pomodoro" && timer) {
     frame.timer = timer;
     caption = `${timer.phase === "break" ? "Nghỉ ngắn" : "Tập trung"} · ${timerNames[timer.state]} · ${clockText(timer.remainingSeconds)}`;

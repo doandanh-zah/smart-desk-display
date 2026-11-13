@@ -129,7 +129,7 @@ const contentTypes = new Map([
   ['/transport.js', 'text/javascript; charset=utf-8'],
   ['/remote-login.js', 'text/javascript; charset=utf-8'],
   ['/zah-avatar.webp', 'image/webp'],
-  ['/solana-devnet.png', 'image/png'],
+  ['/solana-qr.png', 'image/png'],
 ]);
 
 export function createGateway({ env = process.env, storage, assets, waitUntil, fetchCalendar, fetchGoogle, nowMs = Date.now, now = () => Math.floor(nowMs() / 1000) } = {}) {

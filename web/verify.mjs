@@ -273,10 +273,10 @@ try {
     const wallet = mode(page, "Ví Solana");
     await wallet.click();
     await expectText(page, "#active-mode", "Ví Solana");
-    await expectText(page, "#preview-description", /dsuc.sol · Solana Devnet/);
+    await expectText(page, "#preview-description", /dsuc.sol · Địa chỉ nhận Solana/);
     await page.waitForFunction(() => {
       const ctx = document.querySelector("#preview").getContext("2d");
-      const white = ctx.getImageData(8, 53, 1, 1).data;
+      const white = ctx.getImageData(12, 57, 1, 1).data;
       const black = ctx.getImageData(28, 73, 1, 1).data;
       return white[0] === 255 && white[1] === 255 && black[0] === 0 && black[1] === 0;
     });

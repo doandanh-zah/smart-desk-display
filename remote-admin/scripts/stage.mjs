@@ -14,6 +14,6 @@ for (const name of ['package.json', 'package-lock.json', 'vercel.json', '.vercel
   await copyFile(new URL(name, project), new URL(name, stage));
 }
 await mkdir(new URL('dashboard/', stage), { recursive: true });
-for (const name of ['index.html', 'styles.css', 'app.js', 'preview.js', 'transport.js', 'zah-avatar.webp', 'solana-devnet.png']) {
+for (const name of ['index.html', 'styles.css', 'app.js', 'preview.js', 'transport.js', 'zah-avatar.webp', 'solana-qr.png']) {
   await copyFile(new URL('../web/public/' + name, project), new URL('dashboard/' + name, stage));
 }

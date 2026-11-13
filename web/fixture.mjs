@@ -37,7 +37,7 @@ const files = new Map([
   ["/preview.js", ["preview.js", "text/javascript"]],
   ["/transport.js", ["transport.js", "text/javascript"]],
   ["/zah-avatar.webp", ["zah-avatar.webp", "image/webp"]],
-  ["/solana-devnet.png", ["solana-devnet.png", "image/png"]],
+  ["/solana-qr.png", ["solana-qr.png", "image/png"]],
 ]);
 let startedAt = performance.now();
 let rotationAt = startedAt;

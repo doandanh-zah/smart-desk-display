@@ -270,7 +270,6 @@ window.createDeskPreview = function createDeskPreview(canvas) {
 
   function solanaWallet(address, qr) {
     text("SOLANA WALLET", 10, 13, 19, color.text);
-    text("DEVNET", 308, 16, 10, color.warning, "right");
     box(10, 40, 300, 1, color.line);
     text("dsuc.sol", 184, 62, 19, color.accent);
     text("PUBLIC KEY", 184, 102, 10, color.muted);
@@ -289,7 +288,7 @@ window.createDeskPreview = function createDeskPreview(canvas) {
 
   function paintWalletQr() {
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(walletQr, 8, 53, 172, 172);
+    ctx.drawImage(walletQr, 12, 57, 164, 164);
   }
 
   function countdown(data, deviceName) {

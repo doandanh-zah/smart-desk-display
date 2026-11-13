@@ -373,7 +373,6 @@ dialog .actions { justify-content: flex-end; }
 }
 .wallet-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .wallet-identity img { border-radius: 8px; }
-.wallet-identity .badge { color: var(--warning); margin-inline-start: auto; }
 .wallet-panel h1 { margin-block: 6px 2px; font-size: clamp(1.55rem, 5vw, 2.15rem); }
 .wallet-qr {
   display: block;
@@ -393,7 +392,6 @@ dialog .actions { justify-content: flex-end; }
 }
 .wallet-copy { justify-self: stretch; }
 #wallet-feedback:empty { display: none; }
-.wallet-network { text-align: center; }
 
 @media (max-width: 699px) {
   .mode-list:has([data-mode="solana"]:not([hidden])) { grid-template-columns: repeat(2, minmax(0, 1fr)); }

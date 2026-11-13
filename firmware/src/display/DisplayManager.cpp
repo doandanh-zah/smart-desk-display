@@ -253,8 +253,8 @@ void DisplayManager::content(const Frame& frame) {
 }
 
 void DisplayManager::solanaWallet() {
-  constexpr int16_t QrX = 8;
-  constexpr int16_t QrY = 53;
+  constexpr int16_t QrX = 12;
+  constexpr int16_t QrY = 57;
   constexpr int16_t Scale = 4;
   constexpr int16_t QrWidth = solana::QrSize * Scale;
   constexpr int16_t AddressX = 184;
@@ -262,7 +262,6 @@ void DisplayManager::solanaWallet() {
   constexpr uint8_t CharactersPerLine = 11;
 
   drawText("SOLANA WALLET", 13, 10, 13, 180, 2, palette_->text, Alignment::Left);
-  drawText("DEVNET", 6, 204, 16, 104, 1, palette_->warning, Alignment::Right);
   tft_.drawFastHLine(10, 40, 300, palette_->border);
   drawText("dsuc.sol", 8, AddressX, 62, AddressWidth, 2, palette_->accent, Alignment::Left);
   drawText("PUBLIC KEY", 10, AddressX, 102, AddressWidth, 1, palette_->muted, Alignment::Left);
