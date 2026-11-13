@@ -9,14 +9,14 @@ constexpr uint32_t connectTimeoutMs = 20000;
 constexpr uint32_t retryIntervalMs = 60000;
 constexpr uint32_t setupGraceMs = 15000;
 constexpr uint32_t mdnsRetryMs = 5000;
+constexpr char setupNetworkName[] = "Zah Desk";
 constexpr char setupAlphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 const IPAddress setupIp(192, 168, 4, 1);
 }
 
 void WifiService::begin(const Credentials& saved, const String& hostname, uint32_t now) {
     saved_ = saved;
-    const uint32_t suffix = static_cast<uint32_t>(ESP.getEfuseMac() >> 24) & 0xFFFFFF;
-    snprintf(setupSsid_, sizeof(setupSsid_), "SmartDesk-Setup-%06lX", static_cast<unsigned long>(suffix));
+    strcpy(setupSsid_, setupNetworkName);
     WiFi.persistent(false);
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(false);
