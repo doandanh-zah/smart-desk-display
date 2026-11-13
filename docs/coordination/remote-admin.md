@@ -83,3 +83,8 @@
 
 - Deploy bundle từ cùng SHA nạp `d2da7a9984073462e72d42bc196c08e02c91ba7e` bằng git archive và staging trên SSD. [Deployment READY](https://vercel.com/lilzahs-projects/smart-desk-remote-admin/B22QQkiiig1QjXZ8C34iYUVqmxuo) tại `desk.thezah.space`. Sáu asset khớp SHA-1 với staging. Redis local 13/13, smoke active 11/11, Google OAuth callback được bật và từ chối yêu cầu thiếu state.
 - ESP32 LAN trả firmware 1.2.1. Một mẫu Codex thật mới publish qua deployment này đến ESP32. Hai bản tóm tắt Mac và LAN khớp observedAt, cửa sổ 5h/7d, reset và sự hiện diện của credit/reset-credit. Log `.dev/logs/remote-admin-d2da7a9-codex-{publish,lan}.json`. Chờ 06 ghi kết quả đo command ACK.
+
+## Google Calendar xuống ESP32 · 16:42 ICT
+
+- Bật `GOOGLE_CALENDAR_DEVICE_EXPORT=1` trong Vercel Production theo yêu cầu hiển thị lịch trên TFT. Triển khai lại bundle `9f5313c`. [Deployment READY](https://vercel.com/lilzahs-projects/smart-desk-remote-admin/xBigNWeuyqtKw3AJ1X8AfaHx5mGe).
+- Smoke active 11/11. LAN `/api/calendar` của ESP32 1.2.1 chuyển sang `live` và nhận một sự kiện Google Calendar lúc 16:41:57 ICT. Chỉ xác minh trạng thái và số sự kiện, chưa đối chiếu hiển thị vật lý.
