@@ -103,6 +103,11 @@
           </table>
           <div class="actions"><button class="button" id="month-today" type="button" disabled>Tháng hiện tại</button></div>
           <p class="meta" id="month-source"></p>
+          <div class="actions" id="calendar-connect-actions" hidden>
+            <button class="button" id="calendar-connect" type="button">Kết nối Google Calendar</button>
+            <button class="button" id="calendar-disconnect" type="button" hidden>Ngắt kết nối Google Calendar</button>
+          </div>
+          <p class="feedback" id="calendar-feedback" role="status"></p>
           <ul class="calendar-events" id="month-events" hidden></ul>
         </div>
       </details>

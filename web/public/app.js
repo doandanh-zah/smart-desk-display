@@ -46,7 +46,7 @@ let timerAt = 0;
 let online = false;
 let fixture = byId("fixture-banner").dataset.fixture === "true";
 let busy = false;
-let polling = false;
+let pollRead;
 let settingsDirty = false;
 let messageDirty = false;
 let revision = 0;
@@ -64,6 +64,7 @@ const modeTools = {
 let integrations;
 let integrationAt = -Infinity;
 let integrationRead;
+let calendarBusy = false;
 let quotaRenderKey;
 let countdownAt = 0;
 let countdownDraft = false;
@@ -385,7 +386,10 @@ function renderMonth() {
     }
   }
   byId("month-days").replaceChildren(...rows);
-  label("month-source", `Lịch sự kiện · ${sourceStates[calendar?.state] || sourceStates.unavailable}`);
+  label("month-source", `Google Calendar · ${sourceStates[calendar?.state] || sourceStates.unavailable}`);
+  byId("calendar-connect-actions").hidden = !remote || !(calendar?.canConnect || calendar?.connected);
+  byId("calendar-connect").hidden = !calendar?.canConnect || !!calendar?.connected;
+  byId("calendar-disconnect").hidden = !calendar?.connected;
   const events = ["live", "stale"].includes(calendar?.state) ? calendar.events || [] : [];
   const list = byId("month-events");
   list.hidden = !events.length;
@@ -396,6 +400,35 @@ function renderMonth() {
     return item;
   }));
 }
+
+async function changeCalendarConnection(action) {
+  if (!remote || !signedIn || calendarBusy) return;
+  calendarBusy = true;
+  const buttons = byId("calendar-connect-actions").querySelectorAll("button");
+  buttons.forEach((button) => { button.disabled = true; });
+  feedback("calendar-feedback", "Đang xử lý…", "pending");
+  try {
+    const result = await transport.calendar(action);
+    if (action === "connect") {
+      const destination = new URL(result.authorizationUrl);
+      if (destination.origin !== "https://accounts.google.com") throw new Error("Địa chỉ xác thực Google không hợp lệ.");
+      location.assign(destination);
+    } else {
+      integrationAt = -Infinity;
+      if (integrations) integrations = { ...integrations, calendar: { ...integrations.calendar, connected: false, state: "unavailable", events: [] } };
+      renderMonth();
+      feedback("calendar-feedback", "Đã ngắt kết nối Google Calendar.", "success");
+      void readIntegrations(true);
+    }
+  } catch (error) {
+    remoteFailure(error, "calendar-feedback");
+  } finally {
+    calendarBusy = false;
+    buttons.forEach((button) => { button.disabled = false; });
+  }
+}
+byId("calendar-connect").addEventListener("click", () => changeCalendarConnection("connect"));
+byId("calendar-disconnect").addEventListener("click", () => changeCalendarConnection("disconnect"));
 
 function changeMonth(delta) {
   const date = selectedMonth == null ? localToday() : new Date(selectedMonth);
@@ -425,19 +458,41 @@ function windowLabel(window) {
   return { primary: "Hạn mức chính", secondary: "Hạn mức phụ", five_hour: "Cửa sổ 5 giờ", seven_day: "Cửa sổ 7 ngày" }[window.id] || "Hạn mức";
 }
 
+function remainingLabel(reset) {
+  if (reset <= Date.now() / 1000) return "Đã đến giờ đặt lại";
+  const minutes = Math.max(1, Math.ceil((reset - Date.now() / 1000) / 60));
+  const parts = [];
+  if (minutes >= 1440) parts.push(`${Math.floor(minutes / 1440)} ngày`);
+  if (minutes >= 60) parts.push(`${Math.floor(minutes % 1440 / 60)} giờ`);
+  if (minutes < 1440) parts.push(`${minutes % 60} phút`);
+  return `Còn ${parts.join(" ")}`;
+}
+
+function quotaDetail(text) {
+  const element = document.createElement("small");
+  element.className = "meta quota-detail";
+  element.textContent = text;
+  return element;
+}
+
 function renderQuotas() {
   const snapshots = providers.map(quotaSnapshot);
-  const key = JSON.stringify(snapshots);
+  const key = JSON.stringify([snapshots, Math.floor(Date.now() / 60000)]);
   if (key === quotaRenderKey) return;
   quotaRenderKey = key;
   providers.forEach((provider, index) => {
     const quota = snapshots[index];
     const state = quota?.state;
+    const hasSample = ["live", "stale"].includes(state);
     label(`quota-${provider}-state`, sourceStates[state] || sourceStates.unavailable);
     byId(`quota-${provider}-state`).dataset.state = state === "live" ? "online" : state === "stale" ? "offline" : "";
-    label(`quota-${provider}-updated`, quota?.observedAt ? `Mẫu gần nhất · ${localDate(quota.observedAt * 1000)} ICT` : "");
-    const windows = ["live", "stale"].includes(state) ? quota.windows || [] : [];
-    byId(`quota-${provider}-windows`).replaceChildren(...windows.slice(0, 2).map((window) => {
+    label(`quota-${provider}-updated`, quota?.observedAt ? `Đồng bộ gần nhất · ${localDate(quota.observedAt * 1000)} ICT` : "");
+    const windows = hasSample ? quota.windows || [] : [];
+    const expected = [[300, "five_hour"], [10080, "seven_day"]];
+    const entries = expected.map(([minutes, id]) => windows.find((window) => window.windowMinutes === minutes ||
+      (window.windowMinutes == null && window.id === id)) || { windowMinutes: minutes });
+    entries.push(...windows.filter((window) => !entries.includes(window)));
+    const rows = entries.map((window) => {
       const item = document.createElement("div");
       item.className = "quota-window";
       const row = document.createElement("p");
@@ -446,24 +501,33 @@ function renderQuotas() {
       const value = document.createElement("span");
       const used = window.usedPercent;
       const measured = Number.isFinite(used) && used >= 0 && used <= 100;
-      value.textContent = measured ? `${numberFormat.format(used)}% đã dùng` : "Chưa có tỷ lệ sử dụng";
+      const remaining = measured ? 100 - used : null;
+      value.textContent = measured ? `Còn ${numberFormat.format(remaining)}%` : "Chưa có tỷ lệ sử dụng";
       row.append(name, value);
       item.append(row);
       if (measured) {
         const meter = document.createElement("meter");
         meter.min = 0;
         meter.max = 100;
-        meter.value = used;
-        meter.setAttribute("aria-label", name.textContent);
+        meter.value = remaining;
+        meter.setAttribute("aria-label", name.textContent + " còn lại");
         item.append(meter);
       }
-      if (window.resetsAt) {
-        const reset = document.createElement("small");
-        reset.textContent = `Đặt lại ${localDate(window.resetsAt * 1000)} ICT`;
-        item.append(reset);
-      }
+      if (window.resetsAt) item.append(quotaDetail(`Đặt lại ${localDate(window.resetsAt * 1000)} ICT · ${remainingLabel(window.resetsAt)}`));
       return item;
-    }));
+    });
+    const credit = hasSample && provider === "codex" ? quota.credit : null;
+    const creditBalance = typeof credit?.balance === "string" && /^\d+(?:\.\d+)?$/.test(credit.balance) && credit.unit === "credits";
+    const creditText = credit?.unlimited === true ? "Không giới hạn" : creditBalance ? `${credit.balance} credits` :
+      credit?.hasCredits === false ? "Không có credit" : credit?.hasCredits === true ? "Có credit · chưa có số dư" : "Nguồn chưa cung cấp số dư";
+    rows.push(quotaDetail(`${provider === "codex" ? "Credit subscription · Codex App Server" : "Credit subscription · Claude Code"} · ${creditText}`));
+    if (credit?.resetsAt) rows.push(quotaDetail(`Credit đặt lại ${localDate(credit.resetsAt * 1000)} ICT`));
+    const resetCredits = hasSample && provider === "codex" ? quota.resetCredits : null;
+    if (Number.isInteger(resetCredits?.availableCount) && resetCredits.availableCount >= 0) {
+      const expiry = resetCredits.expiresAt ? ` · Hết hạn ${localDate(resetCredits.expiresAt * 1000)} ICT` : "";
+      rows.push(quotaDetail(`Lượt đặt lại được cấp · ${resetCredits.availableCount}${expiry}`));
+    }
+    byId(`quota-${provider}-windows`).replaceChildren(...rows);
   });
 }
 
@@ -600,7 +664,7 @@ function renderStatus() {
       rejected: "ESP32 từ chối lệnh gần nhất.",
       expired: "Lệnh gần nhất đã hết hạn.",
     };
-    const state = remoteCommand?.state;
+    const state = remoteCommand?.state === "applied" && !hasAppliedAck(remoteCommand) ? undefined : remoteCommand?.state;
     byId("remote-feedback").hidden = !messages[state];
     feedback("remote-feedback", messages[state] || "", { queued: "pending", applied: "success", rejected: "error", expired: "error" }[state]);
   }
@@ -695,22 +759,27 @@ async function refreshGithub(expectedRevision) {
   renderTick();
 }
 
+function cancelStatusRead() {
+  clearTimeout(pollTimer);
+  pollRead?.abort();
+}
+
 function schedulePoll(delay) {
   clearTimeout(pollTimer);
   if (!document.hidden && signedIn) pollTimer = setTimeout(poll, delay);
 }
 
 async function poll() {
-  if (busy || polling || document.hidden || !signedIn) return;
+  if (busy || pollRead || document.hidden || !signedIn) return;
   if (remote) return pollRemote();
   if (Date.now() < restartUntil) {
     schedulePoll(restartUntil - Date.now());
     return;
   }
-  polling = true;
+  const read = pollRead = new AbortController();
   const expectedRevision = revision;
   try {
-    const response = await request("status");
+    const response = await request("status", undefined, read.signal);
     if (expectedRevision !== revision) return;
     const next = response.data;
     if (!modeNames[next.mode] || !next.wifi || !next.time || !next.github) {
@@ -732,7 +801,7 @@ async function poll() {
 
     if (shouldReadConfig) {
       try {
-        const { data } = await request("config");
+        const { data } = await request("config", undefined, read.signal);
         if (expectedRevision !== revision) return;
         if (config && (config.githubUsername !== data.githubUsername || config.githubProxyUrl !== data.githubProxyUrl)) {
           github = null;
@@ -759,7 +828,7 @@ async function poll() {
     label("offline-message", `Không đọc được trạng thái ESP32. ${error.message} Trang sẽ tự thử lại.`);
     renderStatus();
   } finally {
-    polling = false;
+    if (pollRead === read) pollRead = undefined;
     schedulePoll(expectedRevision === revision ? (online && (status.pomodoro?.state === "running" || status.countdown?.state === "running") ? 2000 : 4000) : 0);
   }
 }
@@ -782,7 +851,7 @@ function setSignedIn(value) {
   document.querySelector(".nav").hidden = !value;
   document.querySelector(".skip-link").hidden = !value;
   if (!value) {
-    clearTimeout(pollTimer);
+    cancelStatusRead();
     transport.clearSession();
     online = false;
     status = config = github = remoteCommand = undefined;
@@ -802,7 +871,7 @@ function setSignedIn(value) {
     settingsForm.reset();
     byId("wifi-hostname").hidden = true;
     byId("wifi-ip").hidden = false;
-    for (const id of ["mode-feedback", "timer-feedback", "message-feedback", "settings-feedback"]) feedback(id);
+    for (const id of ["mode-feedback", "timer-feedback", "message-feedback", "settings-feedback", "calendar-feedback", "quota-feedback", "countdown-feedback"]) feedback(id);
     renderStatus();
     lastSeenAt = undefined;
     messageDirty = settingsDirty = false;
@@ -821,10 +890,10 @@ function remoteFailure(error, target) {
 }
 
 async function pollRemote() {
-  polling = true;
+  const read = pollRead = new AbortController();
   const expected = revision;
   try {
-    const snapshot = await transport.state();
+    const snapshot = await transport.state(read.signal);
     if (expected !== revision) return;
     remoteConnection = snapshot.connection;
     lastSeenAt = snapshot.lastSeenAt;
@@ -856,24 +925,34 @@ async function pollRemote() {
       renderStatus();
     }
   } finally {
-    polling = false;
-    if (signedIn) schedulePoll(expected === revision ? (remoteCommand?.state === "queued" ? 1800 : 4500) : 0);
+    if (pollRead === read) pollRead = undefined;
+    if (signedIn) schedulePoll(expected === revision ? (remoteCommand?.state === "queued" ? 1000 : 4500) : 0);
   }
+}
+
+function hasAppliedAck(command) {
+  return command?.state === "applied" && command.ack?.result === "applied" && command.ack.id === command.id;
 }
 
 async function sendRemote(path, payload, target) {
   busy = true;
   const expected = ++revision;
+  cancelStatusRead();
   renderControls();
   feedback(target, "Đang gửi lệnh…", "pending");
+  let refreshed = false;
   try {
     const accepted = await transport.send(path, payload);
     if (expected !== revision) return;
     remoteCommand = accepted;
     renderStatus();
     feedback(target, target === "mode-feedback" ? "Đang chờ ESP32…" : "Đang chờ ESP32 xác nhận…", "pending");
+    let attempt = 0;
+    const checkingSince = performance.now();
     while (remoteCommand.state === "queued") {
-      await new Promise((resolve) => setTimeout(resolve, 1800));
+      const delay = document.hidden ? 3200 : [0, 650, 950, 1400][attempt] ?? 2000;
+      attempt += 1;
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       if (expected !== revision) return;
       try {
         const result = await transport.result(remoteCommand.id);
@@ -881,13 +960,14 @@ async function sendRemote(path, payload, target) {
         remoteCommand = result;
       } catch (error) {
         if (error.status === 401 || error.status === 404) throw error;
-        if (Date.now() > (remoteCommand.expiresAt + 10) * 1000) throw error;
+        if (performance.now() - checkingSince > 100000) throw error;
       }
-      if (remoteCommand.state === "queued" && Date.now() > (remoteCommand.expiresAt + 10) * 1000) {
+      if (remoteCommand.state === "queued" && performance.now() - checkingSince > 100000) {
         throw new Error("Chưa xác nhận được kết quả. Đang tải lại trạng thái thiết bị.");
       }
     }
-    const applied = remoteCommand.state === "applied";
+    const applied = hasAppliedAck(remoteCommand);
+    if (remoteCommand.state === "applied" && !applied) throw new Error("Chưa nhận được xác nhận hợp lệ từ ESP32.");
     if (applied && path === "countdown" && payload.action === "configure" && countdownMatchesDraft(payload)) countdownDraft = false;
     if (applied && path === "config") {
       const current = settingsPayload();
@@ -902,6 +982,11 @@ async function sendRemote(path, payload, target) {
       remoteCommand.state === "expired" ? "Lệnh đã hết hạn." : "ESP32 từ chối lệnh.";
     feedback(target, outcome, applied ? "success" : "error");
     renderStatus();
+    if (applied) {
+      // Keep dependent controls locked until the authoritative post-ACK snapshot is rendered.
+      await pollRemote();
+      refreshed = true;
+    }
   } catch (error) {
     if (expected !== revision) return;
     if (error.status === 404) feedback(target, "Không còn kết quả lệnh. Đang tải lại trạng thái thiết bị.", "error");
@@ -909,11 +994,19 @@ async function sendRemote(path, payload, target) {
   } finally {
     busy = false;
     renderControls();
-    schedulePoll(0);
+    if (!refreshed) schedulePoll(0);
   }
 }
 
 async function initRemote() {
+  const locationUrl = new URL(location.href);
+  const calendarResult = locationUrl.searchParams.get("calendar");
+  if (calendarResult === "connected" || calendarResult === "failed") {
+    locationUrl.searchParams.delete("calendar");
+    locationUrl.hash = "calendar-tools";
+    history.replaceState(null, "", locationUrl);
+    byId("calendar-tools").open = true;
+  }
   label("connection-kind", "TRUY CẬP TỪ XA");
   byId("cloud-settings-note").hidden = false;
   byId("address-detail").hidden = true;
@@ -966,6 +1059,12 @@ async function initRemote() {
   try {
     if (await transport.session()) {
       setSignedIn(true);
+      if (calendarResult === "connected" || calendarResult === "failed") {
+        const connected = calendarResult === "connected";
+        feedback("calendar-feedback", connected ? "Đã kết nối Google Calendar." : "Chưa kết nối được Google Calendar. Hãy thử lại.", connected ? "success" : "error");
+        byId("calendar-tools").scrollIntoView();
+        byId("calendar-tools").querySelector("summary").focus({ preventScroll: true });
+      }
       schedulePoll(0);
     }
   } catch (error) {
@@ -981,6 +1080,7 @@ async function command(path, payload, target, success, apply) {
   if (remote) return sendRemote(path, payload, target);
   busy = true;
   revision += 1;
+  cancelStatusRead();
   renderControls();
   feedback(target, "Đang gửi yêu cầu…", "pending");
   try {

@@ -73,14 +73,14 @@ window.createDeskPreview = function createDeskPreview(canvas) {
   };
   const githubPalettes = {
     dark: {
-      bg: "#0e1716", surface: "#172421", line: "#354d46", text: "#eff8f2", muted: "#a5beb4",
+      bg: "#0e1716", surface: "#161b22", line: "#354d46", text: "#eff8f2", muted: "#a5beb4",
       accent: "#8de1b5", warning: "#eac47d", error: "#ffaca5",
-      levels: ["#161b22", "#16391a", "#346a35", "#529e4e", "#79d071"],
+      levels: ["#303a46", "#125638", "#21845a", "#42b978", "#8cf2ac"],
     },
     light: {
-      bg: "#f3f7f2", surface: "#e5eee4", line: "#bccfc2", text: "#142820", muted: "#4b645a",
+      bg: "#f3f7f2", surface: "#eaf0eb", line: "#bccfc2", text: "#142820", muted: "#4b645a",
       accent: "#216441", warning: "#784d14", error: "#a42f2a",
-      levels: ["#d4e0d4", "#a2c7aa", "#77ae88", "#427d59", "#205237"],
+      levels: ["#cad9cf", "#a6cdae", "#6dae82", "#368050", "#195c37"],
     },
   };
   // Sprite and timing mirror firmware/src/display/GitHubPet.h.
@@ -304,8 +304,8 @@ window.createDeskPreview = function createDeskPreview(canvas) {
       const x = 160 + index % 7 * 19;
       const y = 109 + Math.floor(index / 7) * 12;
       const today = day === date.getUTCDate();
-      if (today) roundedBox(x, y - 1, 17, 10, 2, color.accent);
-      text(String(day), x + 8, y, 9, today ? color.bg : color.text, "center");
+      if (today) roundedBox(x, y - 1, 17, 10, 2, color === palettes.light ? "#368050" : "#42b978");
+      text(String(day), x + 8, y, 9, today ? (color === palettes.light ? "#ffffff" : "#0d1117") : color.text, "center");
     }
   }
 
@@ -337,19 +337,23 @@ window.createDeskPreview = function createDeskPreview(canvas) {
     box(16, 68, 288, 1, color.line);
     box(16, 202, 288, 1, color.line);
     const windows = ["LIVE", "STALE"].includes(state) ? data.windows || [] : [];
+    const remainingWindows = [300, 10080].map((minutes) => windows.find((entry) => entry.windowMinutes === minutes ||
+      (entry.windowMinutes == null && entry.id === (minutes === 300 ? "five_hour" : "seven_day"))));
     for (let index = 0; index < 2; index += 1) {
-      const window = windows[index];
+      const window = remainingWindows[index];
       const y = 77 + 60 * index;
-      const name = { primary: "Primary", secondary: "Secondary", five_hour: "5 hours", seven_day: "7 days" }[window?.id];
-      text(name || `WINDOW ${index + 1}`, 16, y, 10, color.muted);
+      text(index === 0 ? "5H USAGE" : "7D USAGE", 16, y, 10, color.muted);
       const used = window?.usedPercent;
       const known = Number.isFinite(used) && used >= 0 && used <= 100;
-      text(known ? `${used}%` : "--", 304, y, 20, accent, "right");
+      text(known ? `${Math.round(used)}%` : "--", 304, y, 20, accent, "right");
       box(16, y + 20, 288, 6, color.surface);
       if (known) box(16, y + 20, Math.floor(288 * used / 100), 6, accent);
-      if (window?.resetsAt) text(`Reset ${ictStamp(window.resetsAt)} ICT`, 16, y + 34, 10, color.muted);
+      text(window?.resetsAt ? `Reset ${ictStamp(window.resetsAt)} ICT` : "Reset --", 16, y + 34, 10, color.muted);
     }
     text(state, 16, 213, 10, state === "STALE" ? color.warning : state === "ERROR" ? color.error : color.muted);
+    const credit = provider === "codex" && ["LIVE", "STALE"].includes(state) ? data.credit : null;
+    const balance = credit?.unit === "credits" && typeof credit.balance === "string" && /^\d+(?:\.\d+)?$/.test(credit.balance) && credit.balance.length <= 20;
+    text(credit?.unlimited ? "CREDIT UNLIMITED" : balance ? `CREDIT ${credit.balance}` : credit?.hasCredits === true ? "CREDIT AVAILABLE" : credit?.hasCredits === false ? "CREDIT NONE" : "CREDIT N/A", 304, 213, 10, color.muted, "right");
     if (data?.observedAt && ["LIVE", "STALE"].includes(state)) {
       text(`Updated ${ictStamp(data.observedAt)} ICT`, 16, 226, 10, color.muted);
     }

@@ -13,11 +13,11 @@
   --danger: #ffaaa2;
   --radius: 10px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --heat-0: #161b22;
-  --heat-1: #16391a;
-  --heat-2: #346a35;
-  --heat-3: #529e4e;
-  --heat-4: #79d071;
+  --heat-0: #303a46;
+  --heat-1: #125638;
+  --heat-2: #21845a;
+  --heat-3: #42b978;
+  --heat-4: #8cf2ac;
   font: 100%/1.5 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -176,7 +176,7 @@ dialog .actions { justify-content: flex-end; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-.calendar-grid { background: #0d1117; }
+.calendar-grid { background: #161b22; }
 .mode-card { text-decoration: none; }
 #quota-link[aria-current="page"], #quota-link.quota-active { border-color: var(--accent); color: var(--accent); }
 .quota-back { text-decoration: none; }
@@ -208,3 +208,6 @@ dialog .actions { justify-content: flex-end; }
 #legacy-tools .disclosure + .disclosure { margin-top: 8px; }
 
 @media (max-width: 49.99rem) { .mode-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.quota-detail { display: block; margin-top: 6px; overflow-wrap: anywhere; }
+#calendar-connect-actions { margin-top: 8px; }

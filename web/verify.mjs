@@ -11,6 +11,7 @@ const browser = await chromium.launch({ args: ["--disable-gpu"] });
 const viewport = { width: 375, height: 850 };
 
 async function withFixture(scenario, test, { prepare, ...options } = {}) {
+  if (process.env.SMART_DESK_REMOTE_ONLY === "1" && !prepare) return;
   const child = spawn(process.execPath, [fixturePath], {
     env: { ...process.env, PORT: "0", FIXTURE_SCENARIO: scenario },
     stdio: ["ignore", "pipe", "inherit"],
@@ -32,7 +33,7 @@ async function withFixture(scenario, test, { prepare, ...options } = {}) {
     const external = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("request", (request) => {
-      if (!request.url().startsWith(origin + "/")) external.push(request.url());
+      if (!request.url().startsWith(origin + "/") && !(prepare && request.url() === "https://accounts.google.com/o/oauth2/v2/auth")) external.push(request.url());
     });
     await prepare?.(page, origin);
     await page.goto(origin);
@@ -243,7 +244,7 @@ try {
         return [...ctx.getImageData(x, y, 1, 1).data].slice(0, 3);
       });
     });
-    const levels = [[22, 27, 34], [22, 57, 26], [52, 106, 53], [82, 158, 78], [121, 208, 113]];
+    const levels = [[48, 58, 70], [18, 86, 56], [33, 132, 90], [66, 185, 120], [140, 242, 172]];
     assert.deepEqual(painted, [...data.levels.slice(196)].map((level) => levels[level]));
     assert.equal(await page.locator("#calendar-grid span").count(), 364);
     assert.equal(await page.locator("#calendar-grid").evaluate((grid) => [...grid.children].map((cell) => cell.dataset.level).join("")), data.levels);
@@ -364,7 +365,7 @@ try {
       const data = await response.json();
       const now = Math.floor(Date.now() / 1000);
       data.quotas.codex = {
-        state: "live", observedAt: now - 901,
+        state: "live", observedAt: now - 901, credit: { balance: "12.5", unit: "credits" }, resetCredits: { availableCount: 2 },
         windows: [{ id: "primary", usedPercent: 37, windowMinutes: 300, resetsAt: now + 300 }],
       };
       data.quotas.claude = {
@@ -375,8 +376,11 @@ try {
     });
     await button(page, "Làm mới").click();
     await expectText(page, "#quota-codex-state", "Dữ liệu đã cũ");
-    await expectText(page, "#quota-codex-windows", "37% đã dùng");
-    await expectText(page, "#quota-claude-windows", "Chưa có tỷ lệ sử dụng");
+    await expectText(page, "#quota-codex-windows", "Còn 63%");
+    await expectText(page, "#quota-codex-windows", /Codex App Server · 12.5 credits/);
+    await expectText(page, "#quota-codex-windows", /Lượt đặt lại được cấp · 2/);
+    await page.locator("#quota-claude-windows").getByText("Chưa có tỷ lệ sử dụng", { exact: true }).first().waitFor();
+    assert.equal(await page.locator("#quota-claude-windows meter").count(), 0);
     assert.equal(await page.locator("#quota-view meter").count(), 1);
     const mascot = (provider) => page.locator(`.${provider}-mascot canvas`);
     const samples = async () => Promise.all(["codex", "claude"].map((provider) => mascot(provider).evaluate((el) => el.toDataURL())));
@@ -409,6 +413,7 @@ try {
   let commandAccepted = false;
   let rejectCommand = false;
   let expireSession = false;
+  let calendarConnected = false;
   let snapshot;
   const writes = [];
   const fixturePassword = crypto.randomUUID();
@@ -420,7 +425,7 @@ try {
     status.countdown = { kind: "duration", state: "idle", durationSeconds: 1500, targetEpochSeconds: null, remainingSeconds: 1500 };
     status.wifi.ip = status.wifi.hostname = null;
     delete config.githubProxyUrl;
-    await page.route(origin + "/", async (route) => {
+    await page.route((url) => url.origin === origin && url.pathname === "/", async (route) => {
       const response = await route.fetch();
       const html = (await response.text()).replace('<html lang="vi">', '<html lang="vi" data-transport="remote">');
       await route.fulfill({ response, body: html });
@@ -441,14 +446,27 @@ try {
         auth = false;
         return json({ ok: true });
       }
-      if (path === "/api/admin/integrations") return json({ v: 1, calendar: { state: "unavailable", events: [] }, quotas: {} });
-      if (path === "/api/admin/state") return json({
+      if (path === "/api/admin/integrations") return json({
+        v: 1, calendar: { state: "unavailable", events: [], canConnect: true, connected: calendarConnected }, quotas: {},
+      });
+      if (path === "/api/admin/calendar/connect") {
+        calendarConnected = true;
+        return json({ ok: true, authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth" });
+      }
+      if (path === "/api/admin/calendar/disconnect") {
+        calendarConnected = false;
+        return json({ ok: true });
+      }
+      if (path === "/api/admin/state") {
+        assert.equal(request.headers()["x-desk-interactive"], "1");
+        return json({
         connection, command,
         lastSeenAt: connection === "offline" ? null : Math.floor(Date.now() / 1000),
         status: connection === "offline" ? null : snapshot.status,
         config: connection === "offline" ? null : snapshot.config,
         github: connection === "offline" ? null : snapshot.github,
       });
+      }
       if (path === "/api/admin/commands") {
         const { id, type, payload } = request.postDataJSON();
         assert.match(id, /^[0-9a-f]{32}$/);
@@ -491,13 +509,27 @@ try {
     await expectText(page, "#connection", "Thiết bị giả lập");
     assert.equal(await page.getByLabel("URL proxy GitHub").isVisible(), false);
     assert.equal(await button(page, "Khởi động lại thiết bị").isVisible(), false);
+    const queuedAt = page.waitForResponse((response) => response.url().endsWith("/api/admin/commands") && response.status() === 202).then(() => performance.now());
+    const ackRead = page.waitForRequest((request) => /\/api\/admin\/commands\/[0-9a-f]+$/.test(request.url())).then(() => performance.now());
     await mode(page, "Đồng hồ").click();
     await expectText(page, "#remote-feedback", /Đang chờ ESP32/);
+    const ackDelay = (await ackRead) - (await queuedAt);
+    assert.ok(ackDelay < 500, `First ACK read took ${ackDelay} ms`);
+    console.log(`First ACK read after HTTP 202: ${Math.round(ackDelay)} ms (fixture)`);
+    assert.equal(await page.locator("#mode-feedback").getAttribute("data-tone"), "pending");
     assert.equal(await mode(page, "Đóng góp GitHub").getAttribute("aria-pressed"), "true");
     assert.equal(await mode(page, "Đồng hồ").isDisabled(), true);
     commandAccepted = true;
     await expectText(page, "#mode-feedback", "ESP32 đã áp dụng lệnh.");
     await expectText(page, "#active-mode", "Đồng hồ + Lịch");
+    await page.route("https://accounts.google.com/**", (route) => route.fulfill({ status: 204 }));
+    const oauth = page.waitForResponse((res) => res.url().startsWith("https://accounts.google.com/"));
+    await button(page, "Kết nối Google Calendar").click();
+    assert.equal((await oauth).status(), 204);
+    await page.goto(page.url().split(/[?#]/)[0] + "?calendar=connected#calendar");
+    await expectText(page, "#calendar-feedback", "Đã kết nối Google Calendar.");
+    await button(page, "Ngắt kết nối Google Calendar").click();
+    await expectText(page, "#calendar-feedback", "Đã ngắt kết nối Google Calendar.");
     await page.locator("#countdown-tools > summary").click();
     await page.getByLabel("Thời lượng (giây)").fill("90");
     await button(page, "Lưu thời lượng").click();
