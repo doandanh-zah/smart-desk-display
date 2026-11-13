@@ -208,3 +208,10 @@ Chờ boot bản firmware đã sửa từ [handoff phần cứng](hardware.md) �
 
 - Dừng phục hồi/đăng nhập quota theo yêu cầu mới. Baseline ESP32 tại `192.168.34.38`, firmware 1.2.3, đang chiếu Codex và startup cũng Codex. Rotation tắt với GitHub, Clock, Countdown, hai timer idle. Calendar có một sự kiện cache tại lúc chụp baseline. Snapshot riêng ở `.dev/integration/remove-quota/before.json`.
 - Kiểm tra phát hành cập nhật để chỉ nhận Calendar + Countdown và bắt lỗi nếu ESP32 còn projection quota hoặc hai route quota còn hoạt động. Fixture kiểm cả kết quả đạt và lỗi nếu có khóa `quotas`. Sau nạp, đối chiếu Codex startup về GitHub, giữ cấu hình còn lại và kiểm Calendar live. Luân phiên có cả quota trong fixture của firmware.
+
+### Bàn giao firmware, LittleFS và cloud 1.2.4
+
+- **01/05 dùng chung commit `e3d5133b6a19402778245848be5aa7d842bcb703`.** Firmware đã qua fixture migration NVS, gồm startup quota → GitHub, lọc rotation, giữ credentials và Calendar. Renderer fixture, Chromium 14/14 và backend Redis thật 12/12 đạt. Backend giữ hai slot rỗng chỉ để firmware cũ đọc Calendar trong lúc chuyển phiên bản. LaunchAgent quota đã gỡ.
+- Hai ảnh build từ `git archive` sạch tại `.dev/integration/responsiveness/release-e3d5133b6a19402778245848be5aa7d842bcb703/.pio-build/esp32doit-devkit-v1/`. Firmware SHA-256 `c8c8965cddc787627426ef2a7f25f5212559ab89d30169af5c487b0f470381dd`. LittleFS SHA-256 `9a2f6d8b1b214dd21c5e3d68375de5b723061344d32bcee5a18da990ed1f74bc`. Ảnh giải nén 1.966.080 byte khớp đủ sáu asset. Log `.dev/logs/integration-1.2.4-final-build.log`.
+- 01 có thể nạp hai ảnh trên sau khi xác minh lại timer rảnh. Giữ NVS và credential. 05 triển khai cloud từ cùng SHA, giữ Calendar/OAuth, Redis, PIN và device token hiện có. Sau nạp, 06 kiểm Calendar live, GitHub, mode đã chuyển, dashboard và heartbeat.
+- Kiểm tra history `origin/main..e3d5133`: 32 commit, 103 bản nội dung tệp thay đổi. Mẫu credential, log/build và tiêu đề lịch trong snapshot riêng không xuất hiện. Remote main vẫn ở `3ab9155`; push sau nghiệm thu.
