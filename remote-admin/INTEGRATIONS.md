@@ -20,3 +20,18 @@ Xem dữ liệu đã lọc tại máy local bằng `node remote-admin/scripts/qu
 - Codex: `node remote-admin/scripts/quota-bridge.mjs codex --publish` từ shell đã nạp `.dev/env.sh`. Chạy lại định kỳ khi máy chủ local hoạt động để số liệu luôn mới.
 - Claude Code: có thể ghép `node /đường/dẫn/remote-admin/scripts/quota-bridge.mjs claude --publish` vào command status line của người dùng. Dùng Node và đường dẫn tuyệt đối, truyền `SMART_DESK_BRIDGE_TOKEN_DIR` vào môi trường status line. Script chỉ gửi hai cửa sổ đã lọc và in phần trăm để dùng làm status line. Không tự sửa cấu hình Claude Code hiện hữu.
 - Hai bridge gửi qua HTTPS tới domain canonical. Token bridge không phải token OpenAI/Anthropic. Máy local không chạy hoặc Claude Code chưa có mẫu thì UI giữ dữ liệu cũ với nhãn stale trong thời gian hợp đồng cho phép.
+
+### Kết nối Google trực tiếp trong admin
+
+OAuth Web application cần đăng ký redirect URI `https://desk.thezah.space/api/auth/google/callback`. Sau khi ID và secret đã lưu ở Vercel Production, deploy rồi đăng nhập admin, mở Lịch và bấm **Kết nối Google Calendar**. Hoàn tất consent trên Google. Backend dùng state một lần, PKCE, phiên admin đang hiệu lực và mã hóa refresh token bằng khóa `GOOGLE_CALENDAR_TOKEN_KEY` (32 byte dạng 64 hex), đặt ở Vercel Sensitive. Nút ngắt kết nối xóa quyền local và cache, rồi thử thu hồi grant tại Google. Biến refresh token dùng cho cách thiết lập cũ vẫn hoạt động khi chưa cấu hình luồng kết nối trực tiếp.
+
+### Claude Code chạy riêng trên Mac này
+
+Trong Terminal tại gốc repo, chạy một phiên với settings dành riêng cho Smart Desk:
+
+```sh
+source .dev/env.sh
+DISABLE_AUTOUPDATER=1 "$SMART_DESK_DEV/remote-qa/claude/node_modules/.bin/claude" --settings "$SMART_DESK_DEV/remote-qa/claude-session/publish-settings.json"
+```
+
+Hoàn tất màn hình chào lần đầu và gửi một tin nhắn ngắn để có mẫu status line. Không cần đổi settings chung. Khi Claude Code gửi cửa sổ 5h hoặc 7d, bridge gửi mẫu đã lọc. Credit subscription Claude giữ chưa có dữ liệu vì status line không cung cấp số dư; gateway spend và context usage là các số liệu khác. [Claude CLI flags](https://code.claude.com/docs/en/cli-reference) · [Status line quota](https://code.claude.com/docs/en/statusline)

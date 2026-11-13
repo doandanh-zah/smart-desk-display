@@ -143,9 +143,10 @@ function deviceGithub(value) {
 }
 
 export function syncRequest(body) {
-  if (!keys(body, ['v', 'ts', 'nonce', 'status', 'config', 'github', 'ack'], ['wantIntegrations']) || body.v !== 1 ||
+  if (!keys(body, ['v', 'ts', 'nonce', 'status', 'config', 'github', 'ack'], ['wantIntegrations', 'pollHints']) || body.v !== 1 ||
       !integer(body.ts, 0, Number.MAX_SAFE_INTEGER) || !text(body.nonce, 32, ID)) return null;
   if (Object.hasOwn(body, 'wantIntegrations') && !flag(body.wantIntegrations)) return null;
+  if (Object.hasOwn(body, 'pollHints') && !flag(body.pollHints)) return null;
   const ack = body.ack;
   if (ack !== null && (!keys(ack, ['id', 'result', 'code']) || !text(ack.id, 32, ID) ||
       !['applied', 'rejected'].includes(ack.result) || !nullable(ack.code, (v) => text(v, 48, CODE)))) return null;
@@ -153,5 +154,5 @@ export function syncRequest(body) {
   const config = deviceConfig(body.config);
   const github = deviceGithub(body.github);
   if (!status || !config || !github) return null;
-  return { nonce: body.nonce, ts: body.ts, snapshot: { status, config, github }, ack, wantIntegrations: body.wantIntegrations === true };
+  return { nonce: body.nonce, ts: body.ts, snapshot: { status, config, github }, ack, wantIntegrations: body.wantIntegrations === true, pollHints: body.pollHints === true };
 }

@@ -57,6 +57,7 @@ if ARGV[3] ~= '' then
         local ack = cjson.decode(ARGV[3])
         command.ack = ack
         command.state = ack.result
+        command.acknowledgedAtMs = tonumber(ARGV[5])
         redis.call('SET', KEYS[5], cjson.encode(command), 'KEEPTTL')
       end
       if pending == ackId then
@@ -66,18 +67,52 @@ if ARGV[3] ~= '' then
     end
   end
 end
-if not pending then return {'ok', ackId, ''} end
+local poll = redis.call('EXISTS', KEYS[6]) == 1 and 3000 or 60000
+if not pending then return {'ok', ackId, '', poll} end
 local recordKey = ARGV[4] .. pending
 local record = redis.call('GET', recordKey)
-if not record then return {'ok', ackId, ''} end
+if not record then return {'ok', ackId, '', poll} end
 local command = cjson.decode(record)
-if tonumber(ARGV[1]) >= command.expiresAt then return {'ok', ackId, ''} end
+if tonumber(ARGV[1]) >= command.expiresAt then return {'ok', ackId, '', poll} end
 if not command.delivered then
   command.delivered = true
+  command.deliveredAtMs = tonumber(ARGV[5])
   record = cjson.encode(command)
   redis.call('SET', recordKey, record, 'KEEPTTL')
 end
-return {'ok', ackId, record}
+return {'ok', ackId, record, poll}
+`;
+
+const STATE = `
+local lastSeen = redis.call('GET', KEYS[1])
+local snapshot = redis.call('GET', KEYS[2])
+local latest = redis.call('GET', KEYS[3])
+local command = latest and redis.call('GET', ARGV[4] .. latest)
+if ARGV[3] == '1' and lastSeen and tonumber(ARGV[1]) - tonumber(lastSeen) <= 75 then
+  local remaining = math.max(0, redis.call('TTL', KEYS[4]))
+  if remaining <= 60 then
+    local used = tonumber(redis.call('GET', KEYS[5])) or 0
+    local extension = math.min(120 - remaining, 1800 - used, tonumber(ARGV[2]) - remaining)
+    if extension > 0 then
+      redis.call('SET', KEYS[5], used + extension, 'EX', ARGV[2])
+      redis.call('SET', KEYS[4], '1', 'EX', remaining + extension)
+    end
+  end
+end
+return {lastSeen or '', snapshot or '', command or ''}
+`;
+
+const TAKE_OAUTH_STATE = `
+local raw = redis.call('GET', KEYS[1])
+if not raw or cjson.decode(raw).nonce ~= ARGV[1] then return '' end
+redis.call('DEL', KEYS[1])
+return raw
+`;
+
+const REMOVE_OAUTH_GRANT = `
+local raw = redis.call('GET', KEYS[1])
+redis.call('DEL', KEYS[1], KEYS[2])
+return raw
 `;
 
 const STORE_QUOTA = `
@@ -105,6 +140,23 @@ export function store(exec) {
     async deleteSession(id) {
       await exec('DEL', key('session:') + id);
     },
+    async calendarGrant() {
+      return JSON.parse(await exec('GET', key('calendar:oauth-grant')));
+    },
+    async putCalendarGrant(grant) {
+      await exec('SET', key('calendar:oauth-grant'), JSON.stringify(grant));
+    },
+    async removeCalendarGrant() {
+      return JSON.parse(await evalScript(REMOVE_OAUTH_GRANT,
+        [key('calendar:oauth-grant'), key('calendar')], []));
+    },
+    async putCalendarState(id, value) {
+      await exec('SET', key('calendar:oauth-state:') + id, JSON.stringify(value), 'EX', 600);
+    },
+    async takeCalendarState(id, nonce) {
+      const raw = await evalScript(TAKE_OAUTH_STATE, [key('calendar:oauth-state:') + id], [nonce]);
+      return raw ? JSON.parse(raw) : null;
+    },
     async integrationSamples() {
       const [calendar, codex, claude] = await exec('MGET', key('calendar'), key('quota:codex'), key('quota:claude'));
       return { calendar: JSON.parse(calendar), codex: JSON.parse(codex), claude: JSON.parse(claude) };
@@ -118,12 +170,13 @@ export function store(exec) {
     async putQuota(provider, sample) {
       await evalScript(STORE_QUOTA, [key('quota:') + provider], [sample.observedAt, JSON.stringify(sample)]);
     },
-    async state() {
-      const [lastSeen, snapshot, latest] = await exec(
-        'MGET', key('last-seen'), key('snapshot'), key('latest'),
-      );
-      const command = latest ? await this.command(latest) : null;
-      return { lastSeen: lastSeen === null ? null : Number(lastSeen), snapshot: snapshot ? JSON.parse(snapshot) : null, command };
+    async state(now, interactive = false) {
+      const day = Math.floor(now / 86400);
+      const [lastSeen, snapshot, command] = await evalScript(STATE,
+        [key('last-seen'), key('snapshot'), key('latest'), key('interactive'), key('interactive:' + day)],
+        [now, (day + 1) * 86400 - now, interactive ? '1' : '0', key('command:')]);
+      return { lastSeen: lastSeen ? Number(lastSeen) : null, snapshot: snapshot ? JSON.parse(snapshot) : null,
+        command: command ? JSON.parse(command) : null };
     },
     async command(id) {
       const raw = await exec('GET', commandKey(id));
@@ -135,12 +188,12 @@ export function store(exec) {
       ], [now, JSON.stringify(command), command.fingerprint, command.id]);
       return { state, command: raw ? JSON.parse(raw) : null };
     },
-    async sync({ nonce, now, snapshot, ack }) {
-      const [state, ackId, command] = await evalScript(SYNC, [
+    async sync({ nonce, now, nowMs = now * 1000, snapshot, ack }) {
+      const [state, ackId, command, pollAfterMs] = await evalScript(SYNC, [
         key('nonce:') + nonce, key('last-seen'), key('snapshot'),
-        key('pending'), commandKey(ack?.id ?? '-'),
-      ], [now, JSON.stringify(snapshot), ack ? JSON.stringify(ack) : '', key('command:')]);
-      return { state, ackId: ackId || null, command: command ? JSON.parse(command) : null };
+        key('pending'), commandKey(ack?.id ?? '-'), key('interactive'),
+      ], [now, JSON.stringify(snapshot), ack ? JSON.stringify(ack) : '', key('command:'), nowMs]);
+      return { state, ackId: ackId || null, command: command ? JSON.parse(command) : null, pollAfterMs };
     },
   };
 }

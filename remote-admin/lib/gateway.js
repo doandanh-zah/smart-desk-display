@@ -1,4 +1,5 @@
-import { integrations, normalizeQuota } from './integrations.js';
+import { calendarOAuth } from './calendar-oauth.js';
+import { googleCalendar, integrations, normalizeQuota } from './integrations.js';
 import { isIP } from 'node:net';
 import { redisClient, store } from './redis.js';
 import { commandPayload, ID, keys, syncRequest, TOKEN } from './validate.js';
@@ -107,9 +108,11 @@ function limitOrThrow([count, ttl], max) {
 
 function publicCommand(command, now) {
   if (!command) return null;
-  const { id, type, payload, createdAt, expiresAt, state, ack } = command;
+  const { id, type, payload, createdAt, expiresAt, state, ack, queuedAtMs, deliveredAtMs, acknowledgedAtMs } = command;
   return { id, type, payload, createdAt, expiresAt,
-    state: state === 'queued' && now >= expiresAt ? 'expired' : state, ack };
+    state: state === 'queued' && now >= expiresAt ? 'expired' : state, ack,
+    queuedAtMs: queuedAtMs ?? createdAt * 1000, deliveredAtMs: deliveredAtMs ?? null,
+    acknowledgedAtMs: acknowledgedAtMs ?? null };
 }
 
 function deviceCommand(command) {
@@ -128,12 +131,16 @@ const contentTypes = new Map([
   ['/zah-avatar.webp', 'image/webp'],
 ]);
 
-export function createGateway({ env = process.env, storage, assets, waitUntil, fetchCalendar, now = () => Math.floor(Date.now() / 1000) } = {}) {
+export function createGateway({ env = process.env, storage, assets, waitUntil, fetchCalendar, fetchGoogle, nowMs = Date.now, now = () => Math.floor(nowMs() / 1000) } = {}) {
   const config = configFrom(env);
   const origin = CANONICAL_ORIGIN;
   const db = config && (storage ?? store(redisClient(config)));
 
-  const integrationView = config && integrations(db, { env, waitUntil, fetchCalendar });
+  const oauth = config && calendarOAuth({ env, db, origin, version: config.version, fetchImpl: fetchGoogle });
+  const integrationView = config && integrations(db, { env, waitUntil,
+    fetchCalendar: fetchCalendar ?? (oauth ? googleCalendar(env, fetchGoogle, oauth.refreshToken) : undefined),
+    calendarConnection: oauth?.connection,
+  });
 
   async function loadSession(request, time) {
     const id = sessionId(request);
@@ -164,6 +171,16 @@ export function createGateway({ env = process.env, storage, assets, waitUntil, f
         return new Response(asset, { headers: { ...headers, 'Content-Type': contentTypes.get(path) } });
       }
 
+      if (path === '/api/auth/google/callback') {
+        requireMethod(request, 'GET');
+        if (!oauth) fail(503, 'setup_required');
+        const connected = await oauth.complete(request, time).catch(() => false);
+        return new Response(null, { status: 303, headers: { ...headers,
+          Location: connected ? '/?calendar=connected#calendar' : '/?calendar=failed#calendar',
+          'Set-Cookie': oauth.clearCookie(),
+        } });
+      }
+
       if (path === '/api/device/sync') {
         requireMethod(request, 'POST');
         if (request.headers.has('origin')) fail(403, 'forbidden');
@@ -173,9 +190,11 @@ export function createGateway({ env = process.env, storage, assets, waitUntil, f
         const input = syncRequest(await body(request, 6144));
         if (!input) fail(400, 'invalid_field');
         if (Math.abs(input.ts - time) > 90) fail(409, 'invalid_device_time');
-        const result = await db.sync({ ...input, now: time });
+        const result = await db.sync({ ...input, now: time, nowMs: nowMs() });
         if (result.state === 'replay') fail(409, 'replay');
         const output = { ok: true, serverTime: time, ackId: result.ackId, command: deviceCommand(result.command) };
+        if (input.pollHints && result.pollAfterMs) output.pollAfterMs = result.pollAfterMs;
+        else if (result.pollAfterMs === 3000) output.pollAfterMs = 3000;
         if (input.wantIntegrations) output.integrations = await integrationView(time, true);
         return json(output);
       }
@@ -236,6 +255,18 @@ export function createGateway({ env = process.env, storage, assets, waitUntil, f
         return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) });
       }
 
+      if (path === '/api/admin/calendar/connect' || path === '/api/admin/calendar/disconnect') {
+        requireMethod(request, 'POST');
+        if (!oauth) fail(503, 'setup_required');
+        if (!keys(await body(request, 128), [])) fail(400, 'invalid_field');
+        if (path.endsWith('/disconnect')) {
+          await oauth.disconnect();
+          return json({ ok: true });
+        }
+        const flow = await oauth.start(sessionId(request));
+        return json({ ok: true, authorizationUrl: flow.authorizationUrl }, 200, { 'Set-Cookie': flow.cookie });
+      }
+
       if (path === '/api/admin/integrations') {
         requireMethod(request, 'GET');
         return json(await integrationView(time));
@@ -243,7 +274,7 @@ export function createGateway({ env = process.env, storage, assets, waitUntil, f
 
       if (path === '/api/admin/state') {
         requireMethod(request, 'GET');
-        const { lastSeen, snapshot, command } = await db.state();
+        const { lastSeen, snapshot, command } = await db.state(time, request.headers.get('x-desk-interactive') === '1');
         const age = lastSeen === null ? Infinity : time - lastSeen;
         return json({
           connection: age <= 75 ? 'online' : age <= 300 ? 'stale' : 'offline',
@@ -264,7 +295,7 @@ export function createGateway({ env = process.env, storage, assets, waitUntil, f
         if (!payload) fail(400, 'invalid_field');
         const command = {
           id: input.id, type: input.type, payload, state: 'queued', ack: null, delivered: false,
-          createdAt: time, expiresAt: time + 90,
+          createdAt: time, expiresAt: time + 90, queuedAtMs: nowMs(),
           fingerprint: sha256(JSON.stringify([input.type, payload])),
         };
         const result = await db.enqueue(command, time);

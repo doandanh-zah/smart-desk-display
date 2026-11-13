@@ -79,7 +79,7 @@ after(async () => {
   if (work) await rm(work, { force: true, recursive: true });
 });
 
-function gateway(gatewayEnv = env) {
+function gateway(gatewayEnv = env, options = {}) {
   const exec = redisClient({
     url: env.UPSTASH_REDIS_REST_URL,
     token: env.UPSTASH_REDIS_REST_TOKEN,
@@ -89,7 +89,7 @@ function gateway(gatewayEnv = env) {
       return Response.json({ result: cli(...JSON.parse(options.body)) });
     },
   });
-  return createGateway({ env: gatewayEnv, storage: store(exec), now: () => now, assets: async (name) => name });
+  return createGateway({ env: gatewayEnv, storage: store(exec), now: () => now, nowMs: () => now * 1000 + 123, assets: async (name) => name, ...options });
 }
 
 const request = (path, { headers, data, base = origin, method } = {}) => new Request(base + path, {
@@ -118,8 +118,8 @@ async function login(ip) {
   return { origin, cookie: cookie.split(';')[0], 'x-csrf-token': auth.csrfToken };
 }
 
-function sync({ nonce = randomHex(16), ts = now, ack = null, headers = {}, wantIntegrations } = {}) {
-  return app(request('/api/device/sync', { data: { v: 1, ts, nonce, ...payload, ack, wantIntegrations },
+function sync({ nonce = randomHex(16), ts = now, ack = null, headers = {}, wantIntegrations, pollHints } = {}) {
+  return app(request('/api/device/sync', { data: { v: 1, ts, nonce, ...payload, ack, wantIntegrations, pollHints },
     headers: { authorization: 'Bearer ' + token, ...headers } }));
 }
 
@@ -278,4 +278,81 @@ test('six-digit PIN preserves leading zero and shares per-IP and global Redis li
   const blockedGlobal = await attempt(0, '203.0.113.80', pin);
   assert.ok(Number(blockedGlobal.headers.get('retry-after')) > 0);
   await expectError(blockedGlobal, 429, 'rate_limited');
+});
+
+test('active admin leases fast polling with a Redis budget and command timestamps', async () => {
+  assert.equal(cli('FLUSHDB'), 'OK');
+  const admin = await login('203.0.113.90');
+  const deskState = () => app(request('/api/admin/state', {
+    headers: { ...admin, 'x-desk-interactive': '1' },
+  }));
+  assert.equal((await deskState()).status, 200);
+  assert.equal((await (await sync()).json()).pollAfterMs, undefined);
+  assert.equal((await (await sync({ pollHints: true })).json()).pollAfterMs, 60000);
+  assert.equal((await deskState()).status, 200);
+  assert.equal((await (await sync({ pollHints: true })).json()).pollAfterMs, 3000);
+  const id = randomHex(16);
+  const created = await (await app(request('/api/admin/commands', { headers: admin,
+    data: { id, type: 'display', payload: { mode: 'clock' } } }))).json();
+  assert.equal(created.command.queuedAtMs, now * 1000 + 123);
+  now++;
+  assert.deepEqual(Object.keys((await (await sync()).json()).command).sort(),
+    ['createdAt', 'expiresAt', 'id', 'payload', 'type']);
+  now++;
+  assert.equal((await (await sync({ ack: { id, result: 'applied', code: null } })).json()).ackId, id);
+  const { command } = await (await app(request('/api/admin/commands/' + id, { headers: admin }))).json();
+  assert.equal(command.deliveredAtMs - command.queuedAtMs, 1000);
+  assert.equal(command.acknowledgedAtMs - command.deliveredAtMs, 1000);
+  cli('DEL', 'smart-desk:remote:v1:interactive');
+  cli('SET', 'smart-desk:remote:v1:interactive:' + Math.floor(now / 86400), '1800', 'EX', '1000');
+  assert.equal((await deskState()).status, 200);
+  assert.equal((await (await sync()).json()).pollAfterMs, undefined);
+});
+
+test('Google OAuth binds one-time state to a live admin session and encrypts the grant', async () => {
+  const googleEnv = { ...env, GOOGLE_CALENDAR_CLIENT_ID: 'fixture-id',
+    GOOGLE_CALENDAR_CLIENT_SECRET: 'fixture-secret', GOOGLE_CALENDAR_TOKEN_KEY: randomHex(32) };
+  const grantToken = 'fixture-only-google-refresh';
+  let exchangeCount = 0;
+  let revokeCount = 0;
+  const google = gateway(googleEnv, { fetchGoogle: async (url, options) => {
+    if (new URL(url).pathname === '/revoke') {
+      revokeCount++;
+      assert.equal(options.body.get('token'), grantToken);
+      return new Response(null);
+    }
+    assert.equal(options.body.get('grant_type'), 'authorization_code');
+    assert.ok(options.body.get('code_verifier'));
+    exchangeCount++;
+    return Response.json({ scope: 'https://www.googleapis.com/auth/calendar.events.owned.readonly', refresh_token: grantToken });
+  } });
+  const admin = await login('203.0.113.91');
+  const connectPath = '/api/admin/calendar/connect';
+  await expectError(await google(request(connectPath, { data: {} })), 401, 'unauthorized');
+  await expectError(await google(request(connectPath, { data: {},
+    headers: { ...admin, 'x-csrf-token': 'invalid' } })), 403, 'forbidden');
+  const start = await google(request(connectPath, { data: {}, headers: admin }));
+  assert.equal(start.status, 200);
+  const callbackCookie = start.headers.get('set-cookie');
+  assert.match(callbackCookie, /Secure; HttpOnly; SameSite=Lax/);
+  const { authorizationUrl } = await start.json();
+  const googleUrl = new URL(authorizationUrl);
+  assert.equal(googleUrl.origin, 'https://accounts.google.com');
+  assert.equal(googleUrl.searchParams.get('code_challenge_method'), 'S256');
+  assert.equal(googleUrl.searchParams.get('redirect_uri'), origin + '/api/auth/google/callback');
+  const path = '/api/auth/google/callback?state=' + googleUrl.searchParams.get('state') + '&code=fixture';
+  const rejected = await google(request(path, { headers: admin }));
+  assert.equal(rejected.headers.get('location'), '/?calendar=failed#calendar');
+  const callback = () => google(request(path, { headers: { cookie: callbackCookie.split(';')[0] } }));
+  const success = await callback();
+  assert.equal(success.status, 303);
+  assert.equal(success.headers.get('location'), '/?calendar=connected#calendar');
+  assert.equal((await callback()).headers.get('location'), '/?calendar=failed#calendar');
+  assert.equal(exchangeCount, 1);
+  const stored = cli('GET', 'smart-desk:remote:v1:calendar:oauth-grant');
+  assert.equal(typeof JSON.parse(stored).sealed, 'string');
+  assert.ok(!stored.includes(grantToken));
+  assert.equal((await google(request('/api/admin/calendar/disconnect', { data: {}, headers: admin }))).status, 200);
+  assert.equal(revokeCount, 1);
+  assert.equal(cli('GET', 'smart-desk:remote:v1:calendar:oauth-grant'), null);
 });

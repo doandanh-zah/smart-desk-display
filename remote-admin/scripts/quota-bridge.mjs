@@ -3,7 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { isAbsolute, join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { normalizeQuota } from '../lib/integrations.js';
+import { codexCredits, normalizeQuota } from '../lib/integrations.js';
 
 const origin = 'https://desk.thezah.space';
 const seconds = () => Math.floor(Date.now() / 1000);
@@ -60,7 +60,9 @@ export async function codexSample(command = 'codex') {
       return [{ id, usedPercent: window.usedPercent, windowMinutes: window.windowDurationMins ?? null,
         resetsAt: window.resetsAt ?? null }];
     });
-    return normalizeQuota('codex', { observedAt, state: windows.length ? 'live' : 'unavailable', windows });
+    const credits = codexCredits(bucket, result.rateLimitResetCredits, observedAt);
+    return normalizeQuota('codex', { observedAt, state: windows.length || credits.credit || credits.resetCredits
+      ? 'live' : 'unavailable', windows, ...credits });
   } finally {
     clearTimeout(deadline);
     lines.close();

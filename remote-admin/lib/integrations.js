@@ -5,6 +5,19 @@ const quotaWindows = { codex: ['primary', 'secondary'], claude: ['five_hour', 's
 const quotas = ['codex', 'claude'];
 const validSeconds = (value) => Number.isInteger(value) && value > 0 && value < 4102444800;
 
+export function codexCredits(bucket, resets, now) {
+  const c = bucket?.credits;
+  const credit = typeof c?.hasCredits === 'boolean' && typeof c.unlimited === 'boolean'
+    ? { balance: typeof c.balance === 'string' && /^[0-9]{1,18}(?:\.[0-9]{1,8})?$/.test(c.balance) ? c.balance : null,
+      unit: 'credits', hasCredits: c.hasCredits, unlimited: c.unlimited, resetsAt: null } : null;
+  const dates = Array.isArray(resets?.credits) ? resets.credits
+    .filter((row) => row.status === 'available' && validSeconds(row.expiresAt) && row.expiresAt > now)
+    .map((row) => row.expiresAt) : [];
+  const resetCredits = Number.isInteger(resets?.availableCount) && resets.availableCount >= 0 && resets.availableCount <= 65535
+    ? { availableCount: resets.availableCount, expiresAt: dates.length ? Math.min(...dates) : null } : null;
+  return { credit, resetCredits };
+}
+
 export function normalizeQuota(provider, sample) {
   if (!quotas.includes(provider) || !sample ||
       !validSeconds(sample.observedAt) || !Array.isArray(sample.windows) || sample.windows.length > 2 ||
@@ -21,18 +34,23 @@ export function normalizeQuota(provider, sample) {
     windows.push({ id: entry.id, windowMinutes: entry.windowMinutes, resetsAt: entry.resetsAt,
       usedPercent: entry.usedPercent, used: null, limit: null, unit: null });
   }
-  if ((sample.state === 'live') !== Boolean(windows.length)) return null;
+  const extra = provider === 'codex' ? codexCredits({ credits: sample.credit }, sample.resetCredits, sample.observedAt)
+    : { credit: null, resetCredits: null };
+  if (extra.resetCredits && validSeconds(sample.resetCredits.expiresAt) &&
+      sample.resetCredits.expiresAt > sample.observedAt) extra.resetCredits.expiresAt = sample.resetCredits.expiresAt;
+  if ((sample.state === 'live') !== Boolean(windows.length || extra.credit || extra.resetCredits)) return null;
   return { source: quotaSources[provider], kind: 'subscription', state: sample.state,
-    observedAt: sample.observedAt, windows };
+    observedAt: sample.observedAt, windows, ...extra };
 }
 
 export function quotaView(provider, sample, now) {
   const quota = normalizeQuota(provider, sample);
   if (!quota || now - quota.observedAt >= 86400) {
-    return { source: quotaSources[provider], kind: 'subscription', state: 'unavailable', observedAt: null, windows: [] };
+    return { source: quotaSources[provider], kind: 'subscription', state: 'unavailable', observedAt: null, windows: [], credit: null, resetCredits: null };
   }
   if (quota.state === 'live' && (now - quota.observedAt > 900 ||
-      quota.windows.some((window) => window.resetsAt !== null && window.resetsAt <= now))) {
+      quota.windows.some((window) => window.resetsAt !== null && window.resetsAt <= now) ||
+      (quota.resetCredits?.expiresAt != null && quota.resetCredits.expiresAt <= now))) {
     quota.state = 'stale';
   }
   return quota;
@@ -40,7 +58,7 @@ export function quotaView(provider, sample, now) {
 
 function dateTime(value, zone) {
   if (typeof value?.dateTime === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(value.dateTime)) {
-    return Date.parse(value.dateTime) / 1000;
+    return Math.floor(Date.parse(value.dateTime) / 1000);
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value?.date ?? '')) return NaN;
   const midnight = Date.parse(value.date + 'T00:00:00Z');
@@ -86,18 +104,26 @@ export function minimalEvents(items, zone, now) {
   }).sort((a, b) => a.start - b.start || a.end - b.end).slice(0, 3);
 }
 
-export function googleCalendar(env, fetchImpl = fetch) {
+export function googleCalendar(env, fetchImpl = fetch, loadRefreshToken) {
   const { GOOGLE_CALENDAR_CLIENT_ID: id, GOOGLE_CALENDAR_CLIENT_SECRET: secret,
     GOOGLE_CALENDAR_REFRESH_TOKEN: refreshToken } = env;
-  if (!id || !secret || !refreshToken) return null;
+  if (!id || !secret || (!refreshToken && !loadRefreshToken)) return null;
   let access;
+  let currentRefreshToken;
   let expiresAt = 0;
   return async function read(now) {
     const signal = AbortSignal.timeout(2600);
+    const configuredToken = loadRefreshToken ? await loadRefreshToken() : refreshToken;
+    if (!configuredToken) return null;
+    if (configuredToken !== currentRefreshToken) {
+      access = null;
+      expiresAt = 0;
+      currentRefreshToken = configuredToken;
+    }
     if (now >= expiresAt) {
       const response = await fetchImpl('https://oauth2.googleapis.com/token', {
         method: 'POST', redirect: 'error', signal,
-        body: new URLSearchParams({ client_id: id, client_secret: secret, refresh_token: refreshToken, grant_type: 'refresh_token' }),
+        body: new URLSearchParams({ client_id: id, client_secret: secret, refresh_token: configuredToken, grant_type: 'refresh_token' }),
       });
       if (!response.ok) throw new Error('calendar_auth_failed');
       const token = await response.json();
@@ -122,10 +148,11 @@ export function googleCalendar(env, fetchImpl = fetch) {
   };
 }
 
-export function integrations(db, { env, fetchCalendar = googleCalendar(env), waitUntil } = {}) {
+export function integrations(db, { env, fetchCalendar = googleCalendar(env), waitUntil, calendarConnection } = {}) {
   const calendarUnavailable = { source: 'google_calendar', state: 'unavailable', observedAt: null, timeZone: TIME_ZONE, events: [] };
   return async function view(now, device = false) {
-    const exposeCalendar = Boolean(fetchCalendar) && (!device || env.GOOGLE_CALENDAR_DEVICE_EXPORT === '1');
+    const connection = calendarConnection ? await calendarConnection().catch(() => null) : null;
+    const exposeCalendar = (!calendarConnection || connection?.connected) && Boolean(fetchCalendar) && (!device || env.GOOGLE_CALENDAR_DEVICE_EXPORT === '1');
     let samples;
     try {
       samples = await db.integrationSamples();
@@ -134,7 +161,7 @@ export function integrations(db, { env, fetchCalendar = googleCalendar(env), wai
     }
     let calendar = calendarUnavailable;
     const cached = samples.calendar;
-    if (exposeCalendar && validSeconds(cached?.observedAt) && now - cached.observedAt < 3600 && Array.isArray(cached.events)) {
+    if (exposeCalendar && (!connection || connection.revision === cached?.revision) && validSeconds(cached?.observedAt) && now - cached.observedAt < 3600 && Array.isArray(cached.events)) {
       calendar = { ...calendarUnavailable, observedAt: cached.observedAt,
         state: now - cached.observedAt < 300 ? 'live' : 'stale',
         events: cached.events.filter((item) => item.end > now) };
@@ -143,7 +170,9 @@ export function integrations(db, { env, fetchCalendar = googleCalendar(env), wai
       const refresh = async () => {
         if (!await db.claimCalendarRefresh()) return null;
         const events = await fetchCalendar(now);
-        await db.putCalendar({ observedAt: now, events });
+        if (!events) return null;
+        if (calendarConnection && (await calendarConnection())?.revision !== connection.revision) return null;
+        await db.putCalendar({ observedAt: now, events, revision: connection?.revision });
         return { ...calendarUnavailable, state: 'live', observedAt: now, events };
       };
       if (device) {
@@ -152,6 +181,7 @@ export function integrations(db, { env, fetchCalendar = googleCalendar(env), wai
         calendar = await refresh().catch(() => null) ?? calendar;
       }
     }
+    if (!device && calendarConnection) calendar = { ...calendar, canConnect: true, connected: Boolean(connection?.connected) };
     return { v: 1, calendar, quotas: {
       codex: quotaView('codex', samples.codex, now), claude: quotaView('claude', samples.claude, now),
     } };
