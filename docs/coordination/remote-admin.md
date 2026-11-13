@@ -93,3 +93,5 @@
 ## Ngừng đồng bộ quota Codex và Claude
 
 - Đã gỡ LaunchAgent `space.thezah.smartdesk.codex-quota` khỏi phiên macOS và khỏi thư mục khởi chạy khi đăng nhập. Gateway gỡ route upload và ngừng đọc quota trong Redis. Hai slot rỗng trong projection v1 giúp firmware cũ tiếp tục đọc Google Calendar trong lúc chuyển bản.
+- Production chạy backend và web từ cùng commit `e3d5133`. [Deployment READY](https://vercel.com/lilzahs-projects/smart-desk-remote-admin/HTUdeJV5PgasjGpyicQwcg4naKD4). Hai biến xác thực bridge đã gỡ khỏi Production và các tệp bridge riêng đã xóa khỏi SSD. Google Calendar tiếp tục trả dữ liệu thật qua ESP32 1.2.3 trong lúc chuyển bản.
+- Backend Redis thật 12/12. Smoke Production 11/11, cả hai route upload trả 404, callback Google tiếp tục từ chối yêu cầu thiếu state. Sáu asset deploy khớp SHA-1 với bản trích xuất. Log `.dev/logs/remote-admin-remove-quota-smoke.log`.
