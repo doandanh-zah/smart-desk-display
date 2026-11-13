@@ -393,3 +393,38 @@ hợp. Theo yêu cầu commit trước flash, build firmware/LittleFS từ bản
 xuất sạch của đúng SHA bàn giao trên SSD và ghi hash của hai ảnh vào mục
 nạp. Bộ lệnh chuẩn bị cục bộ ở
 `.dev/hardware-latency-release/build-exact.sh`, chạy sau khi nạp `.dev/env.sh`.
+
+## Rollout 1.2.1 · độ trễ, quota và nền heatmap trung tính
+
+- SHA chung đã commit trước khi nạp:
+  `d2da7a9984073462e72d42bc196c08e02c91ba7e`.
+  Dùng đúng hai ảnh từ bản trích xuất sạch do 06 bàn giao trong
+  `.dev/integration/responsiveness/release-d2da7a9984073462e72d42bc196c08e02c91ba7e/.pio-build/esp32doit-devkit-v1/`.
+  Đối chiếu SHA-256 và giải nén LittleFS để so sáu asset với tree cùng SHA.
+- Firmware SHA-256
+  `c38a1890c9d756a1a7b2774eb5f6b1f8c09134e8fafc4b79ebc2f08adc1d47ab`.
+  LittleFS SHA-256
+  `a37730494f227b3ec3ea494be2923e1ae7546fbf4c481a7134ae289e1cb579a9`.
+- Cả Countdown và Pomodoro idle trước flash. Esptool nhận ESP32 có MAC
+  đuôi `94:60`, ghi ở 460800 baud tại `0x10000` và `0x210000`,
+  xác minh digest cả hai và reset. Giữ NVS, bảng phân vùng và bootloader.
+  Log `.dev/logs/hardware-1.2.1-flash.log`.
+- Boot 1.2.1, tự kết nối lại Wi-Fi tại `http://192.168.88.192/`, NTP
+  UTC+7 và GitHub live. Sáu asset qua LAN khớp byte với tree. Strict HTTP
+  và kiểm API mode v2 đều đạt. Lần so cấu hình đầu tiên gặp khác biệt,
+  lần đọc xác nhận tiếp theo khớp toàn bộ snapshot trước flash. Không ghi
+  API thay đổi cấu hình trong phiên phần cứng. Xem
+  `.dev/logs/hardware-1.2.1-lan-confirmed.log`.
+- Production đã deploy cùng SHA theo 05. ESP32 nhận mẫu Codex live với
+  cửa sổ 300/10.080 phút, cả hai thời điểm reset, `credit` và
+  `resetCredits`. Calendar và Claude báo unavailable tại lần đọc.
+- Cả hai timer idle trước mở USB diagnostics. Cổng USB gây POWERON_RESET
+  dù đã nhả DTR/RTS. Sau boot, remote vẫn enabled và sync HTTPS trả 200.
+  Heap trước TLS 159.024 byte, block lớn nhất 110.580 byte, heap khi giữ
+  TLS 101.908 byte, stack worker còn 6.644 byte tại mẫu đo. Đây là một
+  mẫu sync, chưa phải thử tải nhiều phiên. Log
+  `.dev/logs/hardware-1.2.1-remote-diag.log`. Đóng serial rồi kiểm lại
+  LAN/NTP/GitHub và API v2, đều đạt.
+- TFT mới còn cần xác nhận trực quan: nền và thẻ GitHub trung tính,
+  ô 0 tách nền, các mức xanh dễ phân biệt, mascot ổn định khi heatmap
+  cập nhật. 06 tiếp tục đo độ trễ lệnh cloud sau rollout.
