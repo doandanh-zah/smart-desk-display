@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/gateway"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/gateway"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/api/gateway"
+    }
+  ],
+  "functions": {
+    "api/gateway.js": {
+      "includeFiles": "assets/**"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101419">
+  <title>Đăng nhập · Smart Desk Display</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/remote-login.js"></script>
+</head>
+<body>
+  <header class="topbar"><div class="shell"><div class="brand"><span class="brand-mark" aria-hidden="true"></span> Smart Desk Display</div></div></header>
+  <main class="shell auth" id="auth">
+    <section class="panel auth-card" aria-labelledby="auth-title">
+      <img src="/zah-avatar.webp" width="64" height="64" alt="">
+      <h1 id="auth-title">Đăng nhập</h1>
+      <p>Dùng PIN 6 chữ số hoặc mật khẩu quản trị đã thiết lập.</p>
+      <noscript><p>Bật JavaScript để đăng nhập.</p></noscript>
+      <form id="auth-form" method="post">
+        <label class="field">PIN hoặc mật khẩu
+          <input id="auth-password" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" required maxlength="256" aria-describedby="auth-feedback">
+        </label>
+        <button class="button primary" type="submit" disabled>Đăng nhập</button>
+      </form>
+      <p class="feedback" id="auth-feedback" role="status"></p>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,281 @@
+import assert from 'node:assert/strict';
+import { spawn, execFileSync } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { setTimeout as delay } from 'node:timers/promises';
+import { after, before, test } from 'node:test';
+import { passwordHash, randomHex, sha256 } from '../lib/auth.js';
+import { createGateway } from '../lib/gateway.js';
+import { redisClient, store } from '../lib/redis.js';
+
+const origin = 'https://desk.thezah.space';
+const password = randomHex(24);
+const token = randomHex(32);
+const bridgeToken = randomHex(32);
+const payload = {
+  status: {
+    deviceName: 'ESP32 Display', mode: 'github', uptimeSeconds: 200, firmwareVersion: '1.0.1',
+    wifi: { connected: true, ip: '192.168.1.2', hostname: 'private.local', password: 'ignored-fixture-value' },
+    time: { synced: true, epochSeconds: 1794556800 },
+    pomodoro: { phase: 'focus', state: 'idle', remainingSeconds: 1500, focusMinutes: 25, breakMinutes: 5 },
+    github: { state: 'live', error: null, lastSync: '2026-11-13T08:00:00Z' },
+  },
+  config: {
+    deviceName: 'ESP32 Display', githubUsername: 'octocat', githubProxyUrl: 'https://example.com/hidden',
+    theme: 'dark', startupMode: 'github', clockShowSeconds: true,
+    rotation: { enabled: false, intervalSeconds: 60, modes: ['github'] },
+    message: { text: 'Hello', alignment: 'center', color: '#39D353', size: 2 },
+  },
+  github: {
+    state: 'live', error: null, lastSync: '2026-11-13T08:00:00Z', username: 'octocat', levels: '0'.repeat(364),
+    totalContributions: 0, currentStreak: 0, repositoryCount: 8,
+  },
+};
+
+let redis;
+let work;
+let cli;
+let env;
+let now = 1794556800;
+let app;
+
+before(async () => {
+  work = await mkdtemp(join(tmpdir(), 'desk-redis-'));
+  const socket = join(work, 'r.sock');
+  let startupError;
+  redis = spawn(process.env.REDIS_SERVER ?? 'redis-server', [
+    '--port', '0', '--unixsocket', socket, '--dir', work, '--save', '', '--appendonly', 'no',
+  ], { stdio: 'ignore' });
+  redis.on('error', (error) => { startupError = error; });
+  cli = (...args) => {
+    const output = execFileSync(process.env.REDIS_CLI ?? 'redis-cli', ['-s', socket, '--json', ...args.map(String)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return JSON.parse(output);
+  };
+  for (let i = 0; i < 50; i++) {
+    if (startupError) throw startupError;
+    try {
+      if (cli('PING') === 'PONG') break;
+    } catch {
+      if (i === 49) throw new Error('Redis did not start');
+    }
+    await delay(25);
+  }
+
+  env = {
+    ADMIN_PASSWORD_HASH: await passwordHash(password), DEVICE_TOKEN_SHA256: sha256(token),
+    CODEX_BRIDGE_TOKEN_SHA256: sha256(bridgeToken),
+    UPSTASH_REDIS_REST_URL: 'https://local-redis.test', UPSTASH_REDIS_REST_TOKEN: 'fixture-storage-token',
+  };
+  app = gateway();
+});
+
+after(async () => {
+  if (redis?.pid && redis.exitCode === null) {
+    const done = new Promise((resolve) => redis.once('exit', resolve));
+    redis.kill();
+    await done;
+  }
+  if (work) await rm(work, { force: true, recursive: true });
+});
+
+function gateway(gatewayEnv = env) {
+  const exec = redisClient({
+    url: env.UPSTASH_REDIS_REST_URL,
+    token: env.UPSTASH_REDIS_REST_TOKEN,
+    fetchImpl: async (url, options) => {
+      assert.equal(url, 'https://local-redis.test');
+      assert.equal(options.headers.authorization, 'Bearer fixture-storage-token');
+      return Response.json({ result: cli(...JSON.parse(options.body)) });
+    },
+  });
+  return createGateway({ env: gatewayEnv, storage: store(exec), now: () => now, assets: async (name) => name });
+}
+
+const request = (path, { headers, data, base = origin, method } = {}) => new Request(base + path, {
+  method: method ?? (data === undefined ? 'GET' : 'POST'),
+  headers: data === undefined ? headers : { 'content-type': 'application/json', ...headers },
+  body: data === undefined ? undefined : JSON.stringify(data),
+});
+
+async function expectError(res, status, code) {
+  assert.equal(res.status, status);
+  assert.match(res.headers.get('cache-control'), /no-store/);
+  assert.equal(res.headers.get('access-control-allow-origin'), null);
+  assert.equal((await res.json()).error.code, code);
+}
+
+async function login(ip) {
+  const response = await app(request('/api/auth/login', {
+    data: { password }, headers: { origin, 'x-vercel-forwarded-for': ip },
+  }));
+  assert.equal(response.status, 200);
+  const cookie = response.headers.get('set-cookie');
+  assert.match(cookie, /^__Host-smart-desk=[a-f0-9]{64}; Path=\/; Secure; HttpOnly; SameSite=Strict; Max-Age=28800$/);
+  const auth = await response.json();
+  assert.equal(auth.authenticated, true);
+  assert.equal(auth.expiresAt, now + 28800);
+  return { origin, cookie: cookie.split(';')[0], 'x-csrf-token': auth.csrfToken };
+}
+
+function sync({ nonce = randomHex(16), ts = now, ack = null, headers = {}, wantIntegrations } = {}) {
+  return app(request('/api/device/sync', { data: { v: 1, ts, nonce, ...payload, ack, wantIntegrations },
+    headers: { authorization: 'Bearer ' + token, ...headers } }));
+}
+
+test('setup is locked and alias GET/HEAD redirects without accepting mutations', async () => {
+  const locked = createGateway({ env: { ADMIN_ORIGIN: 'ignored-fixture-value' } });
+  assert.equal((await locked(request('/'))).status, 503);
+  await expectError(await locked(request('/api/auth/session')), 503, 'setup_required');
+  await expectError(await locked(request('/assets/index.html')), 503, 'setup_required');
+  const alias = 'https://remote-alias.test';
+  const redirected = await app(request('/api/auth/session', { base: alias, method: 'HEAD' }));
+  assert.equal(redirected.status, 308);
+  assert.equal(redirected.headers.get('location'), origin + '/api/auth/session');
+  await expectError(await app(request('/api/auth/login', { base: alias, data: {} })), 403, 'forbidden');
+  await expectError(await app(request('/api/admin/state')), 401, 'unauthorized');
+  await expectError(await app(request('/app.js')), 401, 'unauthorized');
+  assert.equal(await (await app(request('/'))).text(), 'login.html');
+});
+
+test('password KDF, strict cookie, CSRF, logout, session persistence and expiry', async () => {
+  const loginPath = '/api/auth/login';
+  await expectError(await app(request(loginPath, { data: { password } })), 403, 'forbidden');
+  await expectError(await app(request(loginPath, { data: { password: 'wrong' }, headers: { origin } })), 401, 'invalid_credentials');
+  const admin = await login('203.0.113.1');
+  const reloaded = gateway();
+  assert.equal(await (await reloaded(request('/', { headers: admin }))).text(), 'index.html');
+  assert.equal((await (await reloaded(request('/api/auth/session', { headers: admin }))).json()).authenticated, true);
+  await expectError(await reloaded(request('/api/auth/logout', { data: {}, headers: { ...admin, origin: 'https://other.test' } })), 403, 'forbidden');
+  await expectError(await reloaded(request('/api/auth/logout', { data: {}, headers: { ...admin, 'x-csrf-token': 'wrong' } })), 403, 'forbidden');
+  const logout = await reloaded(request('/api/auth/logout', { data: {}, headers: admin }));
+  assert.equal(logout.status, 200);
+  assert.match(logout.headers.get('set-cookie'), /Max-Age=0$/);
+  await expectError(await reloaded(request('/api/admin/state', { headers: admin })), 401, 'unauthorized');
+  const expiring = await login('203.0.113.2');
+  now += 28800;
+  await expectError(await reloaded(request('/api/admin/state', { headers: expiring })), 401, 'unauthorized');
+});
+
+test('login rate limit is shared across gateway instances', async () => {
+  const another = gateway();
+  for (let i = 0; i < 7; i++) {
+    const res = await (i % 2 ? another : app)(request('/api/auth/login', {
+      data: { password: 'wrong' }, headers: { origin, 'x-vercel-forwarded-for': '203.0.113.8' },
+    }));
+    if (i === 6) {
+      assert.ok(Number(res.headers.get('retry-after')) > 0);
+      await expectError(res, 429, 'rate_limited');
+    } else {
+      await expectError(res, 401, 'invalid_credentials');
+    }
+  }
+});
+
+test('device snapshot, scoped credentials, replay, allowlist, durable queue and ACK', async () => {
+  const admin = await login('203.0.113.9');
+  const state = () => app(request('/api/admin/state', { headers: admin }));
+  const create = (value) => app(request('/api/admin/commands', { data: value, headers: admin }));
+  const id = randomHex(16);
+  const command = { id, type: 'display', payload: { mode: 'clock' } };
+  assert.equal((await (await state()).json()).connection, 'offline');
+  await expectError(await create(command), 409, 'device_offline');
+  await expectError(await sync({ headers: { authorization: 'Bearer ' + randomHex(32) } }), 401, 'unauthorized');
+  await expectError(await sync({ headers: { origin } }), 403, 'forbidden');
+  await expectError(await sync({ ts: now - 91 }), 409, 'invalid_device_time');
+  const nonce = randomHex(16);
+  assert.equal((await sync({ nonce })).status, 200);
+  await expectError(await sync({ nonce }), 409, 'replay');
+  const snapshot = await (await state()).json();
+  assert.equal(snapshot.connection, 'online');
+  assert.equal(snapshot.status.wifi.ip, null);
+  assert.equal(snapshot.status.wifi.hostname, null);
+  assert.equal(snapshot.config.githubProxyUrl, undefined);
+  assert.equal(snapshot.status.wifi.password, undefined);
+  await expectError(await create({ ...command, type: 'restart', payload: { confirm: true } }), 400, 'invalid_field');
+  await expectError(await create({ ...command, type: 'config', payload: { githubProxyUrl: 'https://other.test' } }), 400, 'invalid_field');
+  const results = await Promise.all([create(command), create(command)]);
+  for (const res of results) assert.equal(res.status, 202);
+  await expectError(await create({ ...command, payload: { mode: 'stats' } }), 409, 'id_conflict');
+  await expectError(await create({ ...command, id: randomHex(16) }), 409, 'command_pending');
+  const ack = { id, result: 'applied', code: null };
+  const first = await (await sync({ ack })).json();
+  assert.equal(first.ackId, null);
+  assert.deepEqual(first.command, { ...command, createdAt: now, expiresAt: now + 90 });
+  assert.equal((await (await sync()).json()).command.id, id);
+  const acked = await (await sync({ ack })).json();
+  assert.equal(acked.ackId, id);
+  assert.equal(acked.command, null);
+  assert.equal((await (await sync({ ack: { ...ack, result: 'rejected' } })).json()).ackId, id);
+  const lookup = await gateway()(request('/api/admin/commands/' + id, { headers: admin }));
+  assert.equal((await lookup.json()).command.state, 'applied');
+
+  const next = { ...command, id: randomHex(16) };
+  assert.equal((await create(next)).status, 202);
+  now += 76;
+  assert.equal((await (await state()).json()).connection, 'stale');
+  now += 14;
+  assert.equal((await (await state()).json()).command.state, 'expired');
+  assert.equal((await (await sync()).json()).command, null);
+  now += 301;
+  assert.equal((await (await state()).json()).connection, 'offline');
+});
+
+test('quota bridge and optional device projection enforce scoped credentials and freshness', async () => {
+  const path = '/api/bridge/quota/codex';
+  const sample = { observedAt: now, state: 'live', windows: [{
+    id: 'primary', usedPercent: 23, windowMinutes: 300, resetsAt: now + 100,
+    limit: 1000, unit: 'invented',
+  }] };
+  const bridge = (bearer, data, providerPath = path) => app(request(providerPath, {
+    data, headers: { authorization: 'Bearer ' + bearer },
+  }));
+  await expectError(await bridge(token, sample), 401, 'unauthorized');
+  await expectError(await bridge(bridgeToken, sample, '/api/bridge/quota/claude'), 401, 'unauthorized');
+  await expectError(await bridge(bridgeToken, { ...sample, observedAt: now - 91 }), 400, 'invalid_field');
+  assert.equal((await bridge(bridgeToken, sample)).status, 200);
+  assert.equal((await bridge(bridgeToken, { ...sample, observedAt: now - 1,
+    windows: [{ ...sample.windows[0], usedPercent: 10 }] })).status, 200);
+  await expectError(await app(request('/api/admin/integrations')), 401, 'unauthorized');
+  const admin = await login('203.0.113.12');
+  const fromAdmin = await (await app(request('/api/admin/integrations', { headers: admin }))).json();
+  assert.equal((await (await sync()).json()).integrations, undefined);
+  const fromDevice = (await (await sync({ wantIntegrations: true })).json()).integrations;
+  assert.deepEqual(fromAdmin, fromDevice);
+  assert.equal(fromDevice.calendar.state, 'unavailable');
+  assert.equal(fromDevice.quotas.codex.windows[0].usedPercent, 23);
+  assert.equal(fromDevice.quotas.codex.windows[0].limit, null);
+  now += 101;
+  const stale = (await (await sync({ wantIntegrations: true })).json()).integrations;
+  assert.equal(stale.quotas.codex.state, 'stale');
+});
+
+test('six-digit PIN preserves leading zero and shares per-IP and global Redis limits', async () => {
+  // This Redis instance is private to the test file. Start with a fresh rate-limit window.
+  assert.equal(cli('FLUSHDB'), 'OK');
+  const pin = '047352';
+  const pinEnv = { ...env, ADMIN_PASSWORD_HASH: await passwordHash(pin) };
+  const gateways = [gateway(pinEnv), gateway(pinEnv)];
+  const attempt = (instance, ip, value) => gateways[instance](request('/api/auth/login', {
+    data: { password: value }, headers: { origin, 'x-vercel-forwarded-for': ip },
+  }));
+
+  const correct = await attempt(0, '203.0.113.20', pin);
+  assert.equal(correct.status, 200);
+  assert.equal((await correct.json()).authenticated, true);
+  assert.match(correct.headers.get('set-cookie'), /HttpOnly; SameSite=Strict/);
+
+  for (let i = 0; i < 6; i++) {
+    await expectError(await attempt(i % 2, '203.0.113.21', pin.slice(1)), 401, 'invalid_credentials');
+  }
+  const blockedIp = await attempt(1, '203.0.113.21', pin);
+  assert.ok(Number(blockedIp.headers.get('retry-after')) > 0);
+  await expectError(blockedIp, 429, 'rate_limited');
+
+  for (let i = 0; i < 23; i++) {
+    await expectError(await attempt(i % 2, `203.0.113.${30 + i}`, '047351'), 401, 'invalid_credentials');
+  }
+  const blockedGlobal = await attempt(0, '203.0.113.80', pin);
+  assert.ok(Number(blockedGlobal.headers.get('retry-after')) > 0);
+  await expectError(blockedGlobal, 429, 'rate_limited');
+});

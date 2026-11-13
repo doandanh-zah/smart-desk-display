@@ -1,0 +1,7 @@
+{
+  "name": "smart-desk-github-proxy",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": { "test": "node --test test/*.test.js" }
+}

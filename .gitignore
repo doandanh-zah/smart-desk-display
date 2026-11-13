@@ -1,0 +1,10 @@
+.dev/
+.pio/
+node_modules/
+.vercel/
+.DS_Store
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]

@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111512">
+  <title>Smart Desk Display</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./transport.js"></script>
+  <script defer src="./preview.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Đến nội dung chính</a>
+  <header class="topbar">
+    <div class="shell">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span> Smart Desk Display</div>
+      <nav class="nav" aria-label="Điều hướng">
+        <a href="#screen">Điều khiển</a>
+        <a href="#calendar">Lịch GitHub</a>
+        <a href="#settings">Cài đặt</a>
+        <button class="button" id="logout" type="button" hidden>Đăng xuất</button>
+      </nav>
+    </div>
+  </header>
+  <noscript><p class="notice shell">Bật JavaScript để sử dụng bảng điều khiển.</p></noscript>
+  <main class="shell auth" id="auth" hidden>
+    <section class="panel auth-card" aria-labelledby="auth-title">
+      <img src="./zah-avatar.webp" width="64" height="64" alt="">
+      <p class="eyebrow">TRUY CẬP TỪ XA</p>
+      <h1 id="auth-title" tabindex="-1">Đăng nhập</h1>
+      <p id="auth-description">Dùng PIN 6 chữ số hoặc mật khẩu quản trị đã thiết lập.</p>
+      <form id="auth-form" method="post">
+        <label class="field">PIN hoặc mật khẩu
+          <input id="auth-password" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" maxlength="256" required aria-describedby="auth-feedback">
+        </label>
+        <button class="button primary" type="submit">Đăng nhập</button>
+      </form>
+      <p class="feedback" id="auth-feedback" role="status"></p>
+    </section>
+  </main>
+  <main class="shell" id="main" tabindex="-1" hidden>
+    <div class="intro">
+      <div class="identity">
+        <img src="./zah-avatar.webp" width="56" height="56" alt="">
+        <div><p class="eyebrow" id="connection-kind">MẠNG NỘI BỘ</p><h1 id="device-name">Bảng điều khiển</h1></div>
+      </div>
+      <span class="badge" id="connection" role="status">Đang kết nối</span>
+    </div>
+    <div class="notice" id="fixture-banner" hidden>
+      <p>Chế độ thử nghiệm · thao tác không gửi đến ESP32.</p>
+    </div>
+    <div class="notice" id="offline-banner" hidden>
+      <p id="offline-message"></p>
+      <button class="button" id="retry" type="button">Kết nối lại</button>
+    </div>
+    <p class="feedback global-feedback" id="remote-feedback" role="status" hidden></p>
+
+    <div id="dashboard-view">
+    <div class="dashboard" id="screen">
+      <section class="mode-panel" aria-labelledby="modes-title">
+        <header class="panel-head"><h2 id="modes-title">Chọn chế độ</h2></header>
+        <div class="panel-body">
+          <div class="mode-list" id="mode-list" role="group" aria-labelledby="modes-title">
+            <button class="mode-card" type="button" data-mode="github" aria-label="Đóng góp GitHub" aria-pressed="false" disabled><span class="mode-icon icon-grid" aria-hidden="true"></span><strong>GitHub</strong><span class="mode-state" aria-hidden="true"></span></button>
+            <button class="mode-card" type="button" data-mode="clock" aria-pressed="false" disabled><span class="mode-icon icon-clock" aria-hidden="true"></span><strong>Đồng hồ + Lịch</strong><span class="mode-state" aria-hidden="true"></span></button>
+            <button class="mode-card" type="button" data-mode="countdown" aria-pressed="false" disabled><span class="mode-icon icon-timer" aria-hidden="true"></span><strong>Đếm ngược</strong><span class="mode-state" aria-hidden="true"></span></button>
+            <a class="mode-card" href="#quota" id="quota-link"><span class="mode-icon icon-stats" aria-hidden="true"></span><strong>Quota</strong><span class="mode-state" aria-hidden="true"></span></a>
+          </div>
+          <p class="feedback mode-note" id="mode-feedback" role="status"></p>
+        </div>
+      </section>
+      <section class="preview-panel" aria-labelledby="preview-title">
+        <header class="panel-head">
+          <h2 id="preview-title">Xem trước TFT</h2>
+          <span class="meta" id="active-mode">—</span>
+        </header>
+        <figure class="panel-body">
+          <div class="screen-frame">
+            <canvas id="preview" width="320" height="240" role="img" aria-labelledby="preview-title preview-description">Bản xem trước màn hình 320 × 240.</canvas>
+          </div>
+          <figcaption class="meta" id="preview-description">Đang đọc trạng thái thiết bị</figcaption>
+          <div class="preview-actions">
+            <span class="meta">320 × 240 px</span>
+            <button class="button pet-motion" id="pet-motion" type="button" hidden>Tạm dừng chuyển động pet</button>
+          </div>
+        </figure>
+      </section>
+    </div>
+
+    <section class="utility-grid new-tools" aria-label="Công cụ theo chế độ">
+      <details class="panel disclosure" id="calendar-tools">
+        <summary><h2>Lịch thiết bị</h2></summary>
+        <div class="panel-body month-panel">
+          <div class="month-heading">
+            <button class="button" id="month-prev" type="button" aria-label="Tháng trước">‹</button>
+            <h3 id="month-heading" aria-live="polite">Lịch</h3>
+            <button class="button" id="month-next" type="button" aria-label="Tháng sau">›</button>
+          </div>
+          <table class="month-grid" aria-labelledby="month-heading">
+            <thead><tr><th scope="col">CN</th><th scope="col">T2</th><th scope="col">T3</th><th scope="col">T4</th><th scope="col">T5</th><th scope="col">T6</th><th scope="col">T7</th></tr></thead>
+            <tbody id="month-days"></tbody>
+          </table>
+          <div class="actions"><button class="button" id="month-today" type="button" disabled>Tháng hiện tại</button></div>
+          <p class="meta" id="month-source"></p>
+          <ul class="calendar-events" id="month-events" hidden></ul>
+        </div>
+      </details>
+      <details class="panel disclosure" id="countdown-tools">
+        <summary><h2>Đếm ngược</h2><span class="meta" id="countdown-summary"></span></summary>
+        <div class="panel-body">
+          <div class="timer-header"><output id="countdown-remaining" class="timer-display" aria-label="Thời gian đếm ngược còn lại" aria-live="off">--:--</output><span id="countdown-state">Chưa có trạng thái thiết bị</span></div>
+          <form id="countdown-form" method="post">
+            <fieldset id="countdown-fields" disabled>
+              <div class="form-grid">
+                <label class="field">Kiểu đếm ngược
+                  <select id="countdown-kind"><option value="duration">Theo thời lượng</option><option value="target">Đến một mốc</option></select>
+                </label>
+                <label class="field" id="countdown-duration-label">Thời lượng (giây)
+                  <input id="countdown-duration" type="number" inputmode="numeric" min="1" max="359999" step="1" value="1500" required>
+                </label>
+                <label class="field" id="countdown-target-label" hidden>Mốc giờ ICT (UTC+7)
+                  <input id="countdown-target" type="datetime-local" disabled>
+                </label>
+              </div>
+              <div class="actions form-actions">
+                <button class="button primary" type="submit">Lưu thời lượng</button>
+                <button class="button" id="countdown-start" type="button">Bắt đầu</button>
+                <button class="button" id="countdown-pause" type="button">Tạm dừng</button>
+                <button class="button" id="countdown-reset" type="button">Đặt lại</button>
+              </div>
+            </fieldset>
+          </form>
+          <p class="feedback" id="countdown-feedback" role="status"></p>
+        </div>
+      </details>
+    </section>
+
+    <details class="panel disclosure settings" id="legacy-tools">
+      <summary><h2>Công cụ phiên bản trước</h2></summary>
+      <div class="panel-body">
+      <div class="actions legacy-modes">
+        <button class="button" type="button" data-mode="stats" aria-pressed="false" disabled>Thống kê GitHub</button>
+        <button class="button" type="button" data-mode="pomodoro" aria-pressed="false" disabled>Pomodoro</button>
+        <button class="button" type="button" data-mode="message" aria-pressed="false" disabled>Tin nhắn</button>
+      </div>
+    <details class="panel disclosure" id="pomodoro-tools">
+      <summary><h2 id="pomodoro-title">Pomodoro</h2><span id="timer-durations" class="meta"></span></summary>
+      <div class="panel-body">
+        <div class="timer-header"><output class="timer-display" id="timer-remaining" aria-label="Thời gian còn lại" aria-live="off">--:--</output><span id="timer-state">—</span></div>
+        <fieldset class="actions" id="timer-actions" aria-label="Điều khiển Pomodoro" disabled>
+          <button class="button primary" type="button" data-timer="start">Bắt đầu</button>
+          <button class="button" type="button" data-timer="pause">Tạm dừng</button>
+          <button class="button" type="button" data-timer="reset">Đặt lại</button>
+        </fieldset>
+        <p class="feedback" id="timer-feedback" role="status"></p>
+      </div>
+    </details>
+
+    <details class="panel disclosure" id="message-tools">
+      <summary><h2 id="message-title">Tin nhắn trên TFT</h2></summary>
+      <div class="panel-body">
+        <form id="message-form" method="post">
+          <fieldset id="message-fields" disabled>
+            <div class="form-grid">
+              <div class="field wide">
+                <label for="message-text">Nội dung trên TFT</label>
+                <textarea id="message-text" name="text" rows="3" maxlength="160" aria-describedby="message-hint message-count" spellcheck="false"></textarea>
+                <p class="meta" id="message-hint">Tối đa 160 ký tự. Dùng chữ không dấu, số, dấu câu hoặc xuống dòng.</p>
+                <p class="meta" id="message-count">0 / 160</p>
+              </div>
+              <label class="field">Căn chữ
+                <select name="alignment"><option value="left">Trái</option><option value="center">Giữa</option><option value="right">Phải</option></select>
+              </label>
+              <label class="field">Màu chữ
+                <input name="color" type="color" value="#39d353">
+              </label>
+              <label class="field">Cỡ chữ
+                <select name="size"><option value="1">1×</option><option value="2">2×</option><option value="3">3×</option><option value="4">4×</option></select>
+              </label>
+            </div>
+            <div class="actions form-actions">
+              <button class="button primary" type="submit">Lưu tin nhắn</button>
+              <button class="button" id="show-message" type="button">Chuyển sang Tin nhắn</button>
+            </div>
+          </fieldset>
+          <p class="feedback" id="message-feedback" role="status"></p>
+        </form>
+      </div>
+    </details>
+      </div>
+    </details>
+
+    <section class="panel controls calendar" id="calendar" aria-labelledby="calendar-title">
+      <header class="panel-head">
+        <div><h2 id="calendar-title">Lịch đóng góp GitHub</h2><p class="meta">Toàn bộ 52 tuần · tuần cũ nhất ở bên trái</p></div>
+        <span class="badge" id="calendar-state">Đang tải</span>
+      </header>
+      <div class="panel-body">
+        <p id="calendar-summary" class="calendar-summary" aria-live="polite">Đang tải dữ liệu GitHub…</p>
+        <div class="calendar-scroll" id="calendar-scroll" role="region" aria-label="Lưới đóng góp 52 tuần, cuộn ngang để xem toàn bộ" tabindex="0" hidden>
+          <div class="calendar-grid" id="calendar-grid" aria-hidden="true"></div>
+        </div>
+        <div class="calendar-key" id="calendar-key" hidden aria-label="Thang cường độ từ không đóng góp đến cao">
+          <span>Không có</span><span data-level="0"></span><span data-level="1"></span><span data-level="2"></span><span data-level="3"></span><span data-level="4"></span><span>Cao</span>
+        </div>
+      </div>
+    </section>
+
+    <details class="panel disclosure settings" id="settings">
+      <summary><h2 id="settings-title">Cài đặt thiết bị</h2></summary>
+      <div class="panel-body">
+        <p class="meta cloud-settings-note" id="cloud-settings-note" hidden>Tên thiết bị, tài khoản GitHub, proxy và đồng bộ NTP được quản lý trên dashboard mạng nội bộ.</p>
+        <form id="settings-form" method="post">
+          <fieldset id="settings-fields" disabled>
+            <div class="form-grid">
+              <label class="field">Tên thiết bị
+                <input data-local-only name="deviceName" required maxlength="32" pattern="[A-Za-z0-9](?:[A-Za-z0-9 \-]{0,30}[A-Za-z0-9])?" title="1–32 chữ cái ASCII, chữ số, dấu cách hoặc dấu gạch nối. Bắt đầu và kết thúc bằng chữ hoặc số.">
+              </label>
+              <label class="field">Tên tài khoản GitHub
+                <input data-local-only name="githubUsername" maxlength="39" pattern="[A-Za-z0-9]+(?:\-[A-Za-z0-9]+)*" autocapitalize="off" spellcheck="false">
+              </label>
+              <label class="field wide">URL proxy GitHub
+                <input data-local-only name="githubProxyUrl" type="url" maxlength="200" placeholder="https://example.com/api/contributions" autocapitalize="off" spellcheck="false" aria-describedby="github-hint">
+                <span class="meta" id="github-hint">Nhập URL HTTPS đầy đủ của endpoint. Thiếu một trong hai giá trị GitHub sẽ dùng dữ liệu mẫu.</span>
+              </label>
+              <label class="field">Giao diện TFT
+                <select name="theme"><option value="dark">Tối</option><option value="light">Sáng</option></select>
+              </label>
+              <label class="field">Chế độ khi khởi động
+                <select name="startupMode"><option value="github">Đóng góp GitHub</option><option value="clock">Đồng hồ + Lịch</option><option data-current-mode value="countdown">Đếm ngược</option><option data-current-mode value="codex">Codex</option><option data-current-mode value="claude">Claude</option><option data-legacy-mode value="stats">Thống kê GitHub</option><option data-legacy-mode value="pomodoro">Pomodoro</option><option data-legacy-mode value="message">Tin nhắn</option></select>
+              </label>
+              <label class="check"><input name="clockShowSeconds" type="checkbox">Hiện giây trên đồng hồ</label>
+            </div>
+            <fieldset class="rotation" aria-describedby="rotation-hint">
+              <legend>Luân phiên chế độ</legend>
+              <label class="check"><input name="rotationEnabled" type="checkbox">Bật tự động luân phiên</label>
+              <label class="field">Khoảng thời gian (giây)
+                <input name="rotationInterval" type="number" required min="30" max="600" step="1" value="60">
+              </label>
+              <div class="check-grid">
+                <label class="check"><input name="rotationMode" type="checkbox" value="github">Đóng góp GitHub</label>
+                <label class="check"><input name="rotationMode" type="checkbox" value="clock">Đồng hồ + Lịch</label>
+                <label class="check" data-current-mode><input name="rotationMode" type="checkbox" value="countdown">Đếm ngược</label>
+                <label class="check" data-current-mode><input name="rotationMode" type="checkbox" value="codex">Codex</label>
+                <label class="check" data-current-mode><input name="rotationMode" type="checkbox" value="claude">Claude</label>
+                <label class="check" data-legacy-mode><input name="rotationMode" type="checkbox" value="stats">Thống kê GitHub</label>
+                <label class="check" data-legacy-mode><input name="rotationMode" type="checkbox" value="pomodoro">Pomodoro</label>
+                <label class="check" data-legacy-mode><input name="rotationMode" type="checkbox" value="message">Tin nhắn</label>
+              </div>
+              <p class="meta" id="rotation-hint">Chọn ít nhất hai chế độ khi bật. Chọn thủ công sẽ tính lại thời gian chờ luân phiên và lưu chế độ đó cho lần khởi động sau.</p>
+            </fieldset>
+            <div class="actions form-actions">
+              <button class="button primary" type="submit">Lưu cài đặt</button>
+              <button class="button" data-local-only id="sync-time" type="button">Đồng bộ giờ NTP</button>
+            </div>
+          </fieldset>
+          <p class="feedback" id="settings-feedback" role="status"></p>
+        </form>
+        <section data-local-only aria-labelledby="restart-title">
+          <div class="restart-row">
+            <div><h3 id="restart-title">Khởi động lại</h3><p class="meta">Tạm ngắt kết nối và đưa Pomodoro về trạng thái chờ.</p></div>
+            <button class="button danger" id="restart" type="button" disabled>Khởi động lại thiết bị</button>
+          </div>
+          <p class="feedback" id="restart-feedback" role="status"></p>
+        </section>
+      </div>
+    </details>
+
+    <details class="panel disclosure diagnostics" id="diagnostics">
+      <summary><h2>Chẩn đoán thiết bị</h2></summary>
+      <dl class="status-grid" aria-label="Trạng thái thiết bị">
+        <div><dt>Wi-Fi</dt><dd id="wifi-status">—</dd></div>
+        <div id="address-detail"><dt>Địa chỉ mạng nội bộ</dt><dd id="wifi-ip">—</dd><dd id="wifi-hostname" hidden></dd></div>
+        <div><dt>Firmware</dt><dd id="firmware">—</dd></div>
+        <div><dt>Thời gian chạy</dt><dd id="uptime">—</dd></div>
+        <div><dt>Đồng hồ NTP</dt><dd id="time-status">—</dd></div>
+        <div><dt>Đồng bộ GitHub</dt><dd id="github-sync">—</dd></div>
+      </dl>
+    </details>
+    </div>
+    <section id="quota-view" hidden aria-labelledby="quota-title">
+      <a class="button quota-back" href="#screen">← Điều khiển</a>
+      <header class="quota-intro">
+        <h2 id="quota-title" tabindex="-1">Quota</h2>
+        <p class="meta">Hạn mức sử dụng Codex và Claude</p>
+        <div class="actions quota-actions" id="quota-actions">
+          <button class="button" id="quota-refresh" type="button">Làm mới</button>
+        </div>
+        <p class="feedback" id="quota-feedback" role="status"></p>
+      </header>
+      <div class="quota-grid">
+        <section class="panel quota-card" aria-labelledby="quota-codex-title">
+          <header><div class="quota-mascot codex-mascot" aria-hidden="true"><span></span></div><h3 id="quota-codex-title">Codex</h3></header>
+          <p class="badge" id="quota-codex-state">Chưa kết nối</p>
+          <div id="quota-codex-windows"></div>
+          <button class="button quota-send" data-mode="codex" aria-pressed="false" disabled type="button">Hiển thị Codex trên TFT</button>
+          <p class="meta" id="quota-codex-updated"></p>
+        </section>
+        <section class="panel quota-card" aria-labelledby="quota-claude-title">
+          <header><div class="quota-mascot claude-mascot" aria-hidden="true"><span></span></div><h3 id="quota-claude-title">Claude</h3></header>
+          <p class="badge" id="quota-claude-state">Chưa kết nối</p>
+          <div id="quota-claude-windows"></div>
+          <button class="button quota-send" data-mode="claude" aria-pressed="false" disabled type="button">Hiển thị Claude trên TFT</button>
+          <p class="meta" id="quota-claude-updated"></p>
+        </section>
+      </div>
+    </section>
+  </main>
+  <dialog id="restart-dialog" aria-labelledby="restart-dialog-title">
+    <form method="dialog">
+      <h2 id="restart-dialog-title">Khởi động lại thiết bị?</h2>
+      <p>Trang sẽ thử kết nối lại tự động.</p>
+      <div class="actions">
+        <button class="button" value="cancel" autofocus>Hủy</button>
+        <button class="button danger" value="restart">Xác nhận khởi động lại</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

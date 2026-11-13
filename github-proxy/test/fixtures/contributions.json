@@ -1,0 +1,32 @@
+{
+  "data": {
+    "user": {
+      "login": "Octocat",
+      "repositories": { "totalCount": 8 },
+      "contributionsCollection": {
+        "contributionCalendar": {
+          "totalContributions": 114,
+          "weeks": [
+            {
+              "contributionDays": [
+                { "date": "2025-11-15", "contributionCount": 90, "contributionLevel": "FOURTH_QUARTILE", "color": "#39d353" },
+                { "date": "2025-11-16", "contributionCount": 2, "contributionLevel": "FIRST_QUARTILE", "color": "#0e4429" }
+              ]
+            },
+            {
+              "contributionDays": [
+                { "date": "2026-11-07", "contributionCount": 4, "contributionLevel": "SECOND_QUARTILE", "color": "#006d32" },
+                { "date": "2026-11-08", "contributionCount": 0, "contributionLevel": "NONE", "color": "#21262d" },
+                { "date": "2026-11-09", "contributionCount": 2, "contributionLevel": "FIRST_QUARTILE", "color": "#0e4429" },
+                { "date": "2026-11-11", "contributionCount": 5, "contributionLevel": "THIRD_QUARTILE", "color": "#26a641" },
+                { "date": "2026-11-12", "contributionCount": 9, "contributionLevel": "FOURTH_QUARTILE", "color": "#39d353" },
+                { "date": "2026-11-13", "contributionCount": 0, "contributionLevel": "NONE", "color": "#21262d" },
+                { "date": "2026-11-14", "contributionCount": 2, "contributionLevel": "FIRST_QUARTILE", "color": "#0e4429" }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
