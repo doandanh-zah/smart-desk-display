@@ -183,10 +183,6 @@ void DisplayManager::splash(const Frame& frame) {
 }
 
 void DisplayManager::setup(const Frame& frame) {
-  if (frame.mode == Mode::Solana) {
-    if (fresh_) solanaWallet();
-    return;
-  }
   if (fresh_) {
     tft_.drawFastHLine(Left, 54, BodyWidth, palette_->border);
     drawText("WI-FI SETUP", 11, Left, 18, BodyWidth, 2, palette_->accent, Alignment::Left);
@@ -223,6 +219,10 @@ void DisplayManager::setup(const Frame& frame) {
 void DisplayManager::content(const Frame& frame) {
   if (frame.mode == Mode::GitHub) {
     github(frame);
+    return;
+  }
+  if (frame.mode == Mode::Solana) {
+    if (fresh_) solanaWallet();
     return;
   }
   if (fresh_) {
