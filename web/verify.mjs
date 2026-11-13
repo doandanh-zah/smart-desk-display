@@ -512,7 +512,8 @@ try {
     });
   }
 
-  await withFixture("live", async (page) => {
+  await withFixture("live", async (page, origin) => {
+    await page.goto(origin + "/#calendar-tools");
     const password = page.getByLabel("PIN hoặc mật khẩu", { exact: true });
     await expectText(page, "#auth-title", "Đăng nhập");
     assert.equal(await page.locator("#main").isVisible(), false);
@@ -523,6 +524,7 @@ try {
     await password.fill(fixturePassword);
     await button(page, "Đăng nhập").click();
     await expectText(page, "#offline-message", "Chưa nhận được kết nối từ ESP32.");
+    await button(page, "Kết nối Google Calendar").waitFor();
     assert.equal(await mode(page, "Đồng hồ").isDisabled(), true);
     connection = "stale";
     await button(page, "Kết nối lại").click();

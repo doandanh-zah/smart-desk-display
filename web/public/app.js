@@ -74,15 +74,19 @@ const countdownStates = { ...timerNames, waiting_for_time: "Đang chờ đồng 
 let selectedMonth;
 let monthKey;
 
-function revealSettings() {
-  if (location.hash === "#settings") byId("settings").open = true;
+function revealLinkedPanel() {
+  if (location.hash === "#settings" || location.hash === "#calendar-tools") {
+    const panel = byId(location.hash.slice(1));
+    panel.open = true;
+    if (location.hash === "#calendar-tools") panel.scrollIntoView();
+  }
 }
 
-window.addEventListener("hashchange", revealSettings);
+window.addEventListener("hashchange", revealLinkedPanel);
 document.querySelector('.nav a[href="#settings"]').addEventListener("click", () => {
   byId("settings").open = true;
 });
-revealSettings();
+revealLinkedPanel();
 let previewVisible = false;
 let petClock = null;
 let petPaused = false;
@@ -1007,7 +1011,6 @@ async function initRemote() {
     locationUrl.searchParams.delete("calendar");
     locationUrl.hash = "calendar-tools";
     history.replaceState(null, "", locationUrl);
-    byId("calendar-tools").open = true;
   }
   label("connection-kind", "TRUY CẬP TỪ XA");
   byId("cloud-settings-note").hidden = false;
@@ -1033,6 +1036,7 @@ async function initRemote() {
       feedback("auth-feedback");
       setSignedIn(true);
       byId("main").focus();
+      revealLinkedPanel();
       schedulePoll(0);
     } catch (error) {
       remoteFailure(error, "auth-feedback");
@@ -1061,10 +1065,10 @@ async function initRemote() {
   try {
     if (await transport.session()) {
       setSignedIn(true);
+      revealLinkedPanel();
       if (calendarResult === "connected" || calendarResult === "failed") {
         const connected = calendarResult === "connected";
         feedback("calendar-feedback", connected ? "Đã kết nối Google Calendar." : "Chưa kết nối được Google Calendar. Hãy thử lại.", connected ? "success" : "error");
-        byId("calendar-tools").scrollIntoView();
         byId("calendar-tools").querySelector("summary").focus({ preventScroll: true });
       }
       schedulePoll(0);

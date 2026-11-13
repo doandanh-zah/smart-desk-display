@@ -18,7 +18,7 @@ form.addEventListener('submit', async (event) => {
     const result = await response.json();
     if (response.ok && result.authenticated === true) {
       input.value = '';
-      location.replace('/');
+      location.reload();
       return;
     }
     feedback.textContent = result.error?.message ?? 'Không thể đăng nhập.';
