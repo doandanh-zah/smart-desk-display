@@ -322,3 +322,74 @@ sai định dạng trước lần tạo PIN mới. Chờ xác nhận đã lưu h
 project Production, redeploy và smoke active. Firmware 1.1.0 tiếp tục
 hoạt động trên LAN, GitHub live. Chưa mở serial, chưa cấp token,
 chưa reboot và chưa nạp bộ mode đang triển khai.
+
+### Ghép cloud thành công · Production active
+
+- Bản gateway đã qua smoke active 11/11, đối chiếu [handoff 05](remote-admin.md).
+  Kiểm tra USB lần đầu báo remote disabled. Pomodoro idle trên firmware
+  1.1.0 trước ghép. Lần gửi đầu không nhận ACK và kiểm lại vẫn disabled.
+  Gửi lại sau 2 giây ổn định cổng USB, ESP32 xác nhận lưu credential.
+  Dùng luồng trực tiếp từ tệp riêng đã bàn giao. Log chỉ có ACK hoặc lỗi chung.
+- Dù đã nhả DTR/RTS trước khi mở USB serial, quan sát được POWERON_RESET
+  khi dùng USB diagnostics. Sau boot credential vẫn enabled. Serial báo
+  `transport_ok=1 http=200` trên sync Production, heap trước TLS
+  160.560 byte, block lớn nhất 110.580 byte, heap trong TLS 106.584 byte,
+  stack worker còn tối thiểu 6.648 byte tại mẫu đo. Đã đóng serial.
+- Qua LAN, firmware vẫn 1.1.0 và Wi-Fi tự kết nối lại tại
+  `http://192.168.88.192/`. Config khớp trước ghép, NTP đồng bộ, GitHub
+  live và strict HTTP đạt. Giữ firmware và LittleFS đang nạp.
+- Log `.dev/logs/hardware-remote-pairing-{retry,diag,lan}.log`. Session 06
+  có thể dùng phiên admin của chủ tài khoản để xác nhận trạng thái
+  `online`, heartbeat tiếp diễn và thử lệnh có ACK. Hardware đã xác nhận
+  sync ESP32 thật qua TLS và LAN, chưa chạy lệnh thay đổi từ web admin.
+
+## Rollout mode v2 · firmware 1.2.0
+
+- Nạp từ source đã kiểm ở commit `3ab9155`. Firmware theo handoff 02,
+  SHA-256 `17e2688da2e7cab5dd8b429765efad4a27d2869d11abe578bfc1d34ba1de0097`.
+  LittleFS build lại vì ảnh web bàn giao có nhãn login cũ. Cả sáu asset
+  giải nén khớp byte với `web/public/`. SHA-256 ảnh đã nạp
+  `c84343eeadb68cb281de91cebe4943906131fbba9e638a1dfee0c3fa1fa187d9`.
+- Ngay trước ghi, firmware 1.1.0, Pomodoro idle và chưa có Countdown.
+  Esptool nhận đúng MAC đuôi `94:60`. USB mất gói ở bước xác minh tự
+  động sau khi ghi đủ app. Đọc digest riêng bằng `verify_flash` xác
+  nhận app khớp, rồi ghi/xác minh LittleFS. Chỉ ghi tại `0x10000` và
+  `0x210000`, giữ NVS, Wi-Fi và remote token. Đã đóng cổng serial.
+- ESP32 boot firmware 1.2.0, tự nối lại LAN `http://192.168.88.192/`
+  và vào GitHub. NTP UTC+7 đã sync và GitHub `live` trở lại. Cả sáu
+  asset qua HTTP khớp nguồn. Strict HTTP đạt. `verification/check_modes.py`
+  đạt status/countdown, Calendar và hai route Codex/Claude. Countdown
+  khởi động ở duration idle 1.500 giây. Nguồn Calendar/quota thật chưa
+  được kiểm qua bước nạp.
+- So cấu hình trước/sau, chỉ `rotation.modes` đổi theo migration:
+  `github,clock,stats,pomodoro,message` → `github,clock,countdown`.
+  Rotation vẫn tắt, các trường khác khớp. Log
+  `.dev/logs/hardware-modes-v2-{fs,flash,app-verify,flash-fs,http}.log`.
+- Đối chiếu metadata Vercel sau boot, ESP32 tiếp tục POST sync HTTP 200
+  vào deployment v2 `dpl_7YLYkxVge88dV1yabEA9CBfoetRJ` lúc 15:32:29
+  và 15:32:32 ICT, không ghép lại. Log
+  `.dev/logs/remote-admin-modes-v2-heartbeat.log`. 06 có thể tiếp tục
+  nghiệm thu ACK với phiên của chủ tài khoản.
+- Cần quan sát TFT thật sau rollout: kiểm tra năm mức màu của heatmap
+  GitHub, ô thấp nhất vẫn phân biệt với nền, cùng bố cục 24 tuần và
+  mascot. Chọn Clock/Calendar, Countdown, Codex và Claude để kiểm tra
+  tên màn, dữ liệu khi có nguồn và nhãn thiếu nguồn khi chưa nối.
+
+## Chuẩn bị bản tốc độ, palette và nguồn dữ liệu thật
+
+Đo LAN chỉ đọc trên firmware 1.2.0 qua IP thiết bị từ Mac. Bảy GET tuần
+tự mỗi route, tính cả thời gian tải response. Trung vị status/config/
+GitHub/integrations lần lượt 46/46/39/41 ms. HTML 144 ms (20.780 byte),
+app.js 253 ms (49.261 byte). Calendar, Codex, Claude đều unavailable
+tại lúc đo. Đây là baseline HTTP LAN, chưa đo thời gian giao diện vẽ
+hay round trip lệnh cloud. Log `.dev/logs/hardware-lan-speed-baseline.log`.
+Chờ ảnh đã kiểm của các session. Kiểm tra lại hai timer ngay trước khi
+nạp và đọc lại LAN, GitHub, heartbeat cùng diagnostics heap/TLS sau boot.
+
+Bản 1.2.0 đã nhận một mẫu Codex thật từ cloud; Calendar và Claude chưa có
+nguồn tại lần kiểm tra. Chưa flash bản tốc độ. Session 06 đang chờ firmware
+hỗ trợ `pollHints:true` và nhịp nền 60 giây trước khi bàn giao SHA tích
+hợp. Theo yêu cầu commit trước flash, build firmware/LittleFS từ bản trích
+xuất sạch của đúng SHA bàn giao trên SSD và ghi hash của hai ảnh vào mục
+nạp. Bộ lệnh chuẩn bị cục bộ ở
+`.dev/hardware-latency-release/build-exact.sh`, chạy sau khi nạp `.dev/env.sh`.
