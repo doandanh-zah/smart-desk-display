@@ -35,9 +35,7 @@ const char* orEmpty(const char* text) {
 const char* label(Mode mode) {
   switch (mode) {
     case Mode::Countdown: return "COUNTDOWN";
-    case Mode::GitHub:
-    case Mode::Codex:
-    case Mode::Claude: break;
+    case Mode::GitHub: break;
     case Mode::Clock: return "CLOCK + CALENDAR";
     case Mode::Stats: return "DEVELOPER STATS";
     case Mode::Pomodoro: return "POMODORO";
@@ -97,9 +95,7 @@ void DisplayManager::render(const Frame& frame) {
   const bool isGitHub = frame.view == View::Content && frame.mode == Mode::GitHub;
   fresh_ = !drawn_ || frame.view != view_ || frame.theme != theme_ ||
            (frame.view == View::Content && frame.mode != mode_);
-  const bool hasPet = isGitHub || (frame.view == View::Content &&
-                                  (frame.mode == Mode::Codex || frame.mode == Mode::Claude));
-  if (hasPet && (!drawn_ || view_ != View::Content || mode_ != frame.mode)) {
+  if (isGitHub && (!drawn_ || view_ != View::Content || mode_ != Mode::GitHub)) {
     petCycleAt_ = millis();
   }
   if (view_ == View::Setup && frame.view != View::Setup) {
@@ -223,11 +219,6 @@ void DisplayManager::content(const Frame& frame) {
     github(frame);
     return;
   }
-  if (frame.mode == Mode::Codex || frame.mode == Mode::Claude) {
-    const bool claude = frame.mode == Mode::Claude;
-    quota(claude ? frame.claude : frame.codex, claude);
-    return;
-  }
   if (fresh_) {
     tft_.drawFastHLine(Left, 54, BodyWidth, palette_->border);
     tft_.drawFastHLine(Left, 206, BodyWidth, palette_->border);
@@ -245,9 +236,7 @@ void DisplayManager::content(const Frame& frame) {
   field(subtitle_, subtitle, Left, 34, BodyWidth, 1, palette_->muted);
 
   switch (frame.mode) {
-    case Mode::GitHub:
-    case Mode::Codex:
-    case Mode::Claude: break;
+    case Mode::GitHub: break;
     case Mode::Countdown: countdown(frame.countdown); break;
     case Mode::Stats: stats(frame.github); break;
     case Mode::Clock: clock(frame); break;

@@ -10,6 +10,13 @@ Splash hiện tên thiết bị và trạng thái khởi động. Setup hiện t
 
 Toàn màn hình được xóa khi render lần đầu hoặc khi đổi view, mode đang hiển thị hoặc theme của mode có hỗ trợ. Các frame tiếp theo chỉ vẽ lại vùng có dữ liệu hiển thị thay đổi. Heatmap giữ 364 mức cũ để vẽ từng ô thay đổi trong một giao dịch SPI. Clock và Pomodoro thay từng ký tự trong dãy số khi chiều dài giữ nguyên, đồng hồ có vùng giây riêng. Thanh timer cập nhật theo số pixel chênh lệch. Renderer không cấp phát framebuffer.
 
+## Gỡ hai màn quota AI
+
+Renderer bỏ `Mode::Codex`, `Mode::Claude`, dữ liệu quota khỏi `Frame`, cache và cả hai sprite quota. Giá trị enum của GitHub, Clock, Stats, Pomodoro, Message và Countdown được giữ để firmware 02 đọc cấu hình cũ. Migrate các mode đã bỏ và lọc command thuộc phần firmware 02. Mascot ZAH NFT và chuyển động của màn GitHub giữ nguyên.
+
+- Fixture host UBSan đạt với palette và redraw ZAH, lịch, đếm ngược, mode tương thích, splash và Setup. Log `.dev/logs/display-remove-quota-host.log`.
+- Build ESP32 tích hợp của 02 đã thành công với 53.772 byte RAM tĩnh và 1.166.253 byte flash. Log `.dev/logs/firmware-calendar-only-build.log`. 06 chốt ảnh firmware/LittleFS để 01 nạp theo SHA tích hợp. Phiên hiển thị không mở serial.
+
 ## GitHub · nền và thẻ trung tính
 
 Thông số cho session 04 và 06. Chỉ thay ba token bao quanh heatmap GitHub. Hai dải năm mức từ bản tăng tương phản giữ nguyên để đối chiếu A/B. Các theme của mode khác dùng token hiện hành.
@@ -24,7 +31,7 @@ Thông số cho session 04 và 06. Chỉ thay ba token bao quanh heatmap GitHub.
 
 Fixture UBSan và build ESP32 tích hợp đạt. 06 kiểm chéo Canvas/TFT ở cả hai theme, sprite và lưới web tại 390/1.440 px đều đạt. Log `.dev/logs/display-github-neutral-{rgb565,host,build}.log` và `.dev/logs/integration-neutral-heatmap.log`. Nghiệm thu panel thật thực hiện sau khi 01 nạp ảnh được build từ SHA tích hợp đã chốt.
 
-## Đợt trước · palette TFT/preview và quota
+## Lịch sử · palette TFT/preview và màn quota đã gỡ
 
 Các token của đợt tăng tương phản trước lần đổi nền trung tính.
 
@@ -93,7 +100,7 @@ Nguồn phiên bản nằm trong `firmware/src/display/GitHubPet.h`, giữ lư�
 - GIF mô phỏng sinh từ đúng dữ liệu C++ tại `.dev/display-check/zah-simulation/zah-nft.gif`, ảnh idle tại `.dev/display-check/zah-simulation/zah-idle.png`.
 - Session 01 giữ quyền serial và nạp bản tích hợp cuối sau khi session thiết bị/remote hoàn tất. Quan sát TFT thật ở cả hai theme, 24 cột × 7 hàng, legend, mũ/áo, chớp và cười trong một chu kỳ khoảng 5 giây. Kiểm tra trạng thái live và xác nhận heatmap/giờ không nháy khi avatar chuyển động.
 
-## Bố cục 320×240 cho các màn mới · phối hợp 02, 04 và 05
+## Bố cục 320×240 cho Đồng hồ + Lịch và Đếm ngược
 
 Các màu nền, thẻ, chữ chính, chữ phụ, viền theo theme mặc định. Dữ liệu, định danh mode và thời điểm do contract 02/05 quy định. Canvas dùng origin góc trái trên và bước monospace gần 6 px cho nhãn cỡ 1.
 
@@ -101,18 +108,15 @@ Các màu nền, thẻ, chữ chính, chữ phụ, viền theo theme mặc đị
 | --- | --- |
 | Đồng hồ + Lịch | Header `CLOCK + CALENDAR` và tên thiết bị x=16, y=14/34, đường phân cách y=54. HH:MM lớn ở cột trái tại x=16, y=91 (GFX cỡ 4), giây tùy chọn x=16, y=128 (cỡ 2). Thứ/ngày ở y=154/171. Thẻ lịch x=151, y=68, w=153, h=126. Tháng `MON YYYY` tại (161, 78), nhãn thứ tại y=95. Lưới 7×6 nếu có ngày cục bộ, Chủ nhật trước, ô đầu (160, 109), ô 17 px, cột cách 19 px, hàng cách 12 px, ngày hôm nay có nền nhấn. Footer có sự kiện kế tiếp khi nguồn cung cấp, hiện tối đa một sự kiện, với `ALL DAY` hoặc `MM-DD HH:MM` ICT. Dòng footer y=219 và y=230 dành cho NTP và trạng thái nguồn lịch. `--:--` khi chưa có giờ; nguồn lịch chưa kết nối/đã cũ phải ghi rõ khi contract có nguồn ngoài. |
 | Đếm ngược | Header x=16, y=14/34. Nhãn `DURATION` hoặc `TARGET DATE` ở y=72. Số ở y=99 dùng `HH:MM:SS` dưới 100 giờ, `Nd HHh` với mốc xa hơn và `--:--:--` khi chưa có số. Mục tiêu ICT hoặc thời lượng ở y=168. Trạng thái ở y=219. Có nhãn rõ khi chưa đặt mốc, chờ NTP hoặc hoàn tất. Đổi giây chỉ vẽ vùng số. |
-| Codex quota | Header nhận diện x=85, y=19/46. Mascot robot tím với visor cyan ở x=16, y=16. Hai hàng số liệu x=16, y=77 và y=137, mỗi hàng w=288. Nhãn cửa sổ, số phần trăm và thanh mức tách vùng. Thanh mức ở y+20 (cao 6 px), reset ở y+34. Footer y=213/226 cho trạng thái và thời điểm cập nhật ICT. |
-| Claude quota | Cùng khung thông tin quota, mascot khác hình với màu cam ấm, thân tròn và tia quanh đầu. Trạng thái `NOT CONNECTED`, `STALE` hoặc lỗi có chữ. Số liệu cache chỉ hiện khi contract cung cấp giá trị, thiếu dùng `--`. |
 
-Mascot mỗi dịch vụ có vùng (16, 16, 48, 48) từ lưới 16×16 phóng 3×. 04 dùng trực tiếp hàng, bảng màu và quy tắc pose trong `firmware/src/display/QuotaPets.h`. Dấu `.` dùng nền theme. Timeline 3.600 ms, pose chuyển động tại [1.600, 1.900). Codex chớp visor và nháy anten. Claude chớp mắt và lóe tia. Dùng idle khi giảm chuyển động. Accent Codex dark/light `#B6A7FF/#5940A2`, Claude `#F9A977/#9C411D`.
 
-Renderer dùng interface C++ trong [modes-contract.md](modes-contract.md). Pointer null hiện `NOT CONNECTED`. Cache nguồn stale hiện dữ liệu còn dùng được với nhãn `STALE`. Unsupported hiện riêng. Trường phần trăm thiếu dùng `--`. Lịch tháng dùng ngày ICT của thiết bị và vẫn hiện khi nguồn sự kiện chưa kết nối. Các mode cũ `stats/pomodoro/message` vẫn render theo giao diện cũ cho caller tương thích.
+Renderer dùng interface C++ trong [modes-contract.md](modes-contract.md). Pointer null hiện `NOT CONNECTED`. Cache lịch stale hiện dữ liệu còn dùng được với nhãn `STALE`. Unsupported hiện riêng. Lịch tháng dùng ngày ICT của thiết bị và vẫn hiện khi nguồn sự kiện chưa kết nối. Các mode cũ `stats/pomodoro/message` vẫn render theo giao diện cũ cho caller tương thích.
 
 ### Xác minh renderer mới
 
 - Fixture host C++ với UBSan đạt. Kiểm tra ngày 29/02, chuyển giây không vẽ lại lịch, sự kiện all-day stale, đếm ngược duration/target chờ NTP, định dạng ICT của mốc sau 2038, quota chưa kết nối/stale/unsupported, mascot riêng và mọi lệnh chuyển dáng nằm trong 48×48 px. Giữ các phép thử GitHub 24 tuần và mode cũ. Log `.dev/logs/display-modes-host.log`.
 - Lệnh build từ repo là `source .dev/env.sh` rồi `PLATFORMIO_BUILD_DIR="$SMART_DESK_DEV/display-modes-build" PLATFORMIO_LIBDEPS_DIR="$SMART_DESK_DEV/display-check/.pio/libdeps" pio run -d firmware -j 3`. Build tích hợp thành công với 54.276 byte RAM tĩnh và 1.170.061 byte flash. Log `.dev/logs/display-modes-build.log`.
-- Bàn giao session 01 sau khi integration chốt ảnh firmware/LittleFS. Kiểm tra hai mascot thật qua một vòng ≥4 giây, giờ/lịch và đếm ngược độc lập, cùng palette GitHub với legend. Thiết bị cần dữ liệu nguồn do 05 cấp để kiểm tra trạng thái live thực tế. Session renderer không mở serial.
+- Bàn giao session 01 sau khi integration chốt ảnh firmware/LittleFS. Kiểm tra mascot GitHub qua một vòng ≥5 giây, giờ/lịch và đếm ngược độc lập, cùng palette GitHub với legend. Thiết bị cần dữ liệu nguồn do 05 cấp để kiểm tra trạng thái live thực tế. Session renderer không mở serial.
 
 ## Bố cục cũ và các mode tương thích
 

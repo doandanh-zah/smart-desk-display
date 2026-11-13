@@ -5,7 +5,7 @@
 
 namespace desk::display {
 
-enum class Mode : uint8_t { GitHub, Clock, Stats, Pomodoro, Message, Countdown, Codex, Claude };
+enum class Mode : uint8_t { GitHub, Clock, Stats, Pomodoro, Message, Countdown };
 enum class Theme : uint8_t { Dark, Light };
 enum class Alignment : uint8_t { Left, Center, Right };
 enum class GitHubState : uint8_t { Demo, Loading, Live, Stale, Error };
@@ -71,25 +71,6 @@ struct CalendarData {
   CalendarEvent events[3]{};
 };
 
-struct QuotaWindow {
-  char label[21]{};
-  int16_t usedPercent = -1;
-  uint64_t resetEpochSeconds = 0;
-  uint32_t windowMinutes = 0;  // 0 when absent
-};
-
-struct QuotaData {
-  SourceState state = SourceState::NotConnected;
-  uint64_t updatedAt = 0;
-  uint8_t count = 0;
-  QuotaWindow windows[2]{};
-  char creditBalance[24]{};
-  bool creditAvailable = false;
-  bool hasCredits = false;
-  bool creditUnlimited = false;
-  int32_t resetCredits = -1;  // -1 when absent
-};
-
 struct Frame {
   View view = View::Splash;
   Mode mode = Mode::GitHub;
@@ -107,8 +88,6 @@ struct Frame {
   const char* configuredGitHubUsername = nullptr;
   CountdownData countdown;
   const CalendarData* calendar = nullptr;
-  const QuotaData* codex = nullptr;
-  const QuotaData* claude = nullptr;
 };
 
 class DisplayManager {
@@ -139,8 +118,6 @@ class DisplayManager {
   void syncStatus(const GitHubData& data, int16_t statusY, int16_t detailY);
   void clock(const Frame& frame);
   void countdown(const CountdownData& data);
-  void quota(const QuotaData* data, bool claude);
-  void quotaPet(bool claude, uint32_t now);
   void pomodoro(const Frame& frame);
   void message(const Frame& frame);
   void networkStatus(const Frame& frame);
@@ -164,9 +141,6 @@ class DisplayManager {
   uint32_t petCycleAt_ = 0;
   uint8_t petPose_ = 0;
   char calendarDay_[11]{};
-  char quotaCredit_[49]{};
-  char quotaPercents_[2][49]{}, quotaResets_[2][49]{};
-  int16_t quotaWidths_[2]{};
   GitHubState githubState_ = GitHubState::Loading;
   int16_t progressWidth_ = -1;
   char message_[161]{};
