@@ -2,7 +2,7 @@
 
 const byId = (id) => document.getElementById(id);
 const modeNames = {
-  github: "Đóng góp GitHub", clock: "Đồng hồ + Lịch", countdown: "Đếm ngược", codex: "Quota Codex", claude: "Quota Claude", stats: "Thống kê GitHub",
+  github: "Đóng góp GitHub", clock: "Đồng hồ + Lịch", countdown: "Đếm ngược", stats: "Thống kê GitHub",
   pomodoro: "Pomodoro", message: "Tin nhắn",
 };
 const githubNames = {
@@ -61,14 +61,12 @@ const modeTools = {
   clock: byId("calendar-tools"), countdown: byId("countdown-tools"),
   pomodoro: byId("pomodoro-tools"), message: byId("message-tools"),
 };
-let integrations;
-let integrationAt = -Infinity;
-let integrationRead;
+let calendarSnapshot;
+let calendarReadAt = -Infinity;
+let calendarReading;
 let calendarBusy = false;
-let quotaRenderKey;
 let countdownAt = 0;
 let countdownDraft = false;
-const providers = ["codex", "claude"];
 const sourceStates = { live: "Đã cập nhật", stale: "Dữ liệu đã cũ", unavailable: "Chưa kết nối", unsupported: "Không hỗ trợ", error: "Lỗi đồng bộ" };
 const countdownStates = { ...timerNames, waiting_for_time: "Đang chờ đồng bộ NTP" };
 let selectedMonth;
@@ -174,7 +172,7 @@ function renderPreview(timer) {
     }
   } else if (mode === "clock") {
     frame.showSeconds = config?.clockShowSeconds ?? true;
-    if (status.countdown) frame.calendar = integrations?.calendar ?? { state: "unavailable" };
+    if (status.countdown) frame.calendar = calendarSnapshot ?? { state: "unavailable" };
     frame.localEpoch = deviceLocalEpoch(frame.showSeconds);
     caption = frame.localEpoch == null ? "Đang chờ đồng bộ NTP · UTC+7" : "Đồng hồ thiết bị · UTC+7";
     if (frame.localEpoch != null) {
@@ -185,9 +183,6 @@ function renderPreview(timer) {
   } else if (mode === "countdown") {
     frame.countdown = currentCountdown();
     caption = frame.countdown ? `${countdownStates[frame.countdown.state]} · ${countdownTime(frame.countdown.remainingSeconds)}` : "Chưa có trạng thái đếm ngược";
-  } else if (providers.includes(mode)) {
-    frame.quota = quotaSnapshot(mode);
-    caption = `${modeNames[mode]} · ${sourceStates[frame.quota?.state] || sourceStates.unavailable}`;
   } else if (mode === "pomodoro" && timer) {
     frame.timer = timer;
     caption = `${timer.phase === "break" ? "Nghỉ ngắn" : "Tập trung"} · ${timerNames[timer.state]} · ${clockText(timer.remainingSeconds)}`;
@@ -198,7 +193,7 @@ function renderPreview(timer) {
   }
 
   draw(frame);
-  label("active-mode", modeNames[mode] || "—");
+  label("active-mode", modeNames[mode] || (mode ? "Chế độ cũ" : "—"));
   label("preview-description", `${fixture ? "Giả lập · " : ""}${!online && status ? "Trạng thái gần nhất · " : ""}${caption}`);
   if (previewMode !== mode) {
     previewMode = mode;
@@ -219,7 +214,7 @@ function renderPreview(timer) {
 }
 
 function syncPetMotion() {
-  const hasPet = previewMode === "github" || providers.includes(previewMode);
+  const hasPet = previewMode === "github";
   const motionAvailable = hasPet && !reducedMotion.matches;
   if (!motionAvailable && document.activeElement === petMotionButton) {
     modes.find((button) => button.dataset.mode === previewMode)?.focus();
@@ -362,7 +357,7 @@ function localToday() {
 function renderMonth() {
   const today = localToday();
   const epoch = today?.getTime();
-  const calendar = integrations?.calendar;
+  const calendar = calendarSnapshot;
   const view = selectedMonth ?? epoch;
   const date = view == null ? null : new Date(view);
   const key = JSON.stringify([date?.getUTCFullYear(), date?.getUTCMonth(), today?.getUTCDate(), today?.getUTCMonth(), calendar]);
@@ -420,11 +415,11 @@ async function changeCalendarConnection(action) {
       if (destination.origin !== "https://accounts.google.com") throw new Error("Địa chỉ xác thực Google không hợp lệ.");
       location.assign(destination);
     } else {
-      integrationAt = -Infinity;
-      if (integrations) integrations = { ...integrations, calendar: { ...integrations.calendar, connected: false, state: "unavailable", events: [] } };
+      calendarReadAt = -Infinity;
+      if (calendarSnapshot) calendarSnapshot = { ...calendarSnapshot, connected: false, state: "unavailable", events: [] };
       renderMonth();
       feedback("calendar-feedback", "Đã ngắt kết nối Google Calendar.", "success");
-      void readIntegrations(true);
+      void readCalendar(true);
     }
   } catch (error) {
     remoteFailure(error, "calendar-feedback");
@@ -446,168 +441,34 @@ byId("month-prev").addEventListener("click", () => changeMonth(-1));
 byId("month-next").addEventListener("click", () => changeMonth(1));
 byId("month-today").addEventListener("click", () => { selectedMonth = undefined; renderMonth(); });
 
-function quotaSnapshot(provider) {
-  const quota = integrations?.quotas?.[provider];
-  if (!quota || !["live", "stale"].includes(quota.state)) return quota;
-  const now = Date.now() / 1000;
-  if (quota.observedAt && now - quota.observedAt > 86400) return { state: "unavailable", windows: [] };
-  if (quota.state === "live" && ((quota.observedAt != null && now - quota.observedAt > 900) || quota.windows?.some((window) => window.resetsAt != null && window.resetsAt <= now))) {
-    return { ...quota, state: "stale" };
-  }
-  return quota;
-}
-
-function windowLabel(window) {
-  if (window.windowMinutes && window.windowMinutes % 1440 === 0) return `Cửa sổ ${window.windowMinutes / 1440} ngày`;
-  if (window.windowMinutes && window.windowMinutes % 60 === 0) return `Cửa sổ ${window.windowMinutes / 60} giờ`;
-  if (window.windowMinutes) return `Cửa sổ ${window.windowMinutes} phút`;
-  return { primary: "Hạn mức chính", secondary: "Hạn mức phụ", five_hour: "Cửa sổ 5 giờ", seven_day: "Cửa sổ 7 ngày" }[window.id] || "Hạn mức";
-}
-
-function remainingLabel(reset) {
-  if (reset <= Date.now() / 1000) return "Đã đến giờ đặt lại";
-  const minutes = Math.max(1, Math.ceil((reset - Date.now() / 1000) / 60));
-  const parts = [];
-  if (minutes >= 1440) parts.push(`${Math.floor(minutes / 1440)} ngày`);
-  if (minutes >= 60) parts.push(`${Math.floor(minutes % 1440 / 60)} giờ`);
-  if (minutes < 1440) parts.push(`${minutes % 60} phút`);
-  return `Còn ${parts.join(" ")}`;
-}
-
-function quotaDetail(text) {
-  const element = document.createElement("small");
-  element.className = "meta quota-detail";
-  element.textContent = text;
-  return element;
-}
-
-function renderQuotas() {
-  const snapshots = providers.map(quotaSnapshot);
-  const key = JSON.stringify([snapshots, Math.floor(Date.now() / 60000)]);
-  if (key === quotaRenderKey) return;
-  quotaRenderKey = key;
-  providers.forEach((provider, index) => {
-    const quota = snapshots[index];
-    const state = quota?.state;
-    const hasSample = ["live", "stale"].includes(state);
-    label(`quota-${provider}-state`, sourceStates[state] || sourceStates.unavailable);
-    byId(`quota-${provider}-state`).dataset.state = state === "live" ? "online" : state === "stale" ? "offline" : "";
-    label(`quota-${provider}-updated`, quota?.observedAt ? `Đồng bộ gần nhất · ${localDate(quota.observedAt * 1000)} ICT` : "");
-    const windows = hasSample ? quota.windows || [] : [];
-    const expected = [[300, "five_hour"], [10080, "seven_day"]];
-    const entries = expected.map(([minutes, id]) => windows.find((window) => window.windowMinutes === minutes ||
-      (window.windowMinutes == null && window.id === id)) || { windowMinutes: minutes });
-    entries.push(...windows.filter((window) => !entries.includes(window)));
-    const rows = entries.map((window) => {
-      const item = document.createElement("div");
-      item.className = "quota-window";
-      const row = document.createElement("p");
-      const name = document.createElement("strong");
-      name.textContent = windowLabel(window);
-      const value = document.createElement("span");
-      const used = window.usedPercent;
-      const measured = Number.isFinite(used) && used >= 0 && used <= 100;
-      const remaining = measured ? 100 - used : null;
-      value.textContent = measured ? `Còn ${numberFormat.format(remaining)}%` : "Chưa có tỷ lệ sử dụng";
-      row.append(name, value);
-      item.append(row);
-      if (measured) {
-        const meter = document.createElement("meter");
-        meter.min = 0;
-        meter.max = 100;
-        meter.value = remaining;
-        meter.setAttribute("aria-label", name.textContent + " còn lại");
-        item.append(meter);
-      }
-      if (window.resetsAt) item.append(quotaDetail(`Đặt lại ${localDate(window.resetsAt * 1000)} ICT · ${remainingLabel(window.resetsAt)}`));
-      return item;
-    });
-    const credit = hasSample && provider === "codex" ? quota.credit : null;
-    const creditBalance = typeof credit?.balance === "string" && /^\d+(?:\.\d+)?$/.test(credit.balance) && credit.unit === "credits";
-    const creditText = credit?.unlimited === true ? "Không giới hạn" : creditBalance ? `${credit.balance} credits` :
-      credit?.hasCredits === false ? "Không có credit" : credit?.hasCredits === true ? "Có credit · chưa có số dư" : "Nguồn chưa cung cấp số dư";
-    rows.push(quotaDetail(`${provider === "codex" ? "Credit subscription · Codex App Server" : "Credit subscription · Claude Code"} · ${creditText}`));
-    if (credit?.resetsAt) rows.push(quotaDetail(`Credit đặt lại ${localDate(credit.resetsAt * 1000)} ICT`));
-    const resetCredits = hasSample && provider === "codex" ? quota.resetCredits : null;
-    if (Number.isInteger(resetCredits?.availableCount) && resetCredits.availableCount >= 0) {
-      const expiry = resetCredits.expiresAt ? ` · Hết hạn ${localDate(resetCredits.expiresAt * 1000)} ICT` : "";
-      rows.push(quotaDetail(`Lượt đặt lại được cấp · ${resetCredits.availableCount}${expiry}`));
-    }
-    byId(`quota-${provider}-windows`).replaceChildren(...rows);
-  });
-}
-
-async function readIntegrations(force = false) {
-  if (!signedIn || (!remote && !status?.countdown) || integrationRead || (!force && performance.now() - integrationAt < 30000)) return;
+async function readCalendar(force = false) {
+  if (!signedIn || (!remote && !status?.countdown) || calendarReading || (!force && performance.now() - calendarReadAt < 30000)) return;
   const expected = revision;
-  integrationAt = performance.now();
-  integrationRead = true;
+  calendarReadAt = performance.now();
+  calendarReading = true;
   try {
-    const next = remote ? await transport.integrations() : (await request("integrations")).data;
+    const next = remote ? await transport.readCalendar() : (await request("calendar")).data;
     if (expected !== revision) return;
-    if (next.v !== 1 || !next.calendar || !next.quotas) throw new Error("Chưa có dữ liệu tích hợp hợp lệ.");
-    integrations = next;
-    if (byId("quota-feedback").dataset.tone === "source") feedback("quota-feedback");
+    if (!next || !Array.isArray(next.events)) throw new Error("Chưa có dữ liệu lịch hợp lệ.");
+    calendarSnapshot = next;
+    if (byId("calendar-feedback").dataset.tone === "source") feedback("calendar-feedback");
   } catch (error) {
     if (expected !== revision) return;
-    if (remote && error.status === 401) remoteFailure(error, "quota-feedback");
+    if (remote && error.status === 401) remoteFailure(error, "calendar-feedback");
     else {
-      if (integrations) {
-        const markStale = (entry) => entry?.state === "live" ? { ...entry, state: "stale" } : entry;
-        integrations = {
-          ...integrations, calendar: markStale(integrations.calendar),
-          quotas: Object.fromEntries(providers.map((id) => [id, markStale(integrations.quotas[id])])),
-        };
-      }
-      feedback("quota-feedback", error.status === 404 ? "Nguồn tích hợp chưa khả dụng." : "Không đọc được dữ liệu hạn mức.", "source");
+      if (calendarSnapshot?.state === "live") calendarSnapshot = { ...calendarSnapshot, state: "stale" };
+      feedback("calendar-feedback", error.status === 404 ? "Nguồn lịch chưa khả dụng." : "Không đọc được dữ liệu lịch.", "source");
     }
   } finally {
-    integrationRead = false;
-    if (expected === revision) { renderQuotas(); renderTick(); }
+    calendarReading = false;
+    if (expected === revision) renderTick();
   }
 }
 
-const quotaPets = providers.map((provider) => {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 48;
-  document.querySelector(`.${provider}-mascot`).replaceChildren(canvas);
-  return [provider, canvas.getContext("2d")];
-});
-let quotaPetClock;
-function syncQuotaMotion() {
-  clearInterval(quotaPetClock);
-  quotaPets.forEach(([provider, ctx]) => window.paintDeskQuotaPet(ctx, provider, 0));
-  if (location.hash !== "#quota" || document.hidden || reducedMotion.matches || !signedIn) return;
-  const start = performance.now();
-  let previous;
-  quotaPetClock = setInterval(() => {
-    const elapsed = performance.now() - start;
-    const phase = elapsed % 3600;
-    const pose = phase >= 1600 && phase < 1900;
-    if (pose === previous) return;
-    previous = pose;
-    quotaPets.forEach(([provider, ctx]) => window.paintDeskQuotaPet(ctx, provider, elapsed));
-  }, 50);
+function redirectRetiredPage() {
+  if (location.hash === "#quota") history.replaceState(null, "", location.pathname + location.search);
 }
-
-function showView() {
-  const quota = location.hash === "#quota";
-  const leavingQuota = !quota && !byId("quota-view").hidden;
-  byId("dashboard-view").hidden = quota;
-  byId("quota-view").hidden = !quota;
-  if (quota) byId("quota-link").setAttribute("aria-current", "page");
-  else byId("quota-link").removeAttribute("aria-current");
-  syncQuotaMotion();
-  if (quota) {
-    byId("quota-title").focus();
-    renderQuotas();
-    void readIntegrations();
-  } else if (leavingQuota) {
-    byId("quota-link").focus();
-  }
-}
-window.addEventListener("hashchange", showView);
-byId("quota-refresh").addEventListener("click", () => { void readIntegrations(true); });
+window.addEventListener("hashchange", redirectRetiredPage);
 
 function renderTick() {
   const timer = currentTimer();
@@ -618,7 +479,6 @@ function renderTick() {
   }
   renderPreview(timer);
   renderCalendar();
-  if (location.hash === "#quota") renderQuotas();
   renderMonth();
   renderCountdown();
 }
@@ -627,7 +487,7 @@ function renderControls() {
   const ready = online && !!status;
   const working = busy || remoteCommand?.state === "queued";
   modes.forEach((button) => {
-    const unavailable = !ready || (["countdown", ...providers].includes(button.dataset.mode) && !status?.countdown);
+    const unavailable = !ready || (button.dataset.mode === "countdown" && !status?.countdown);
     button.disabled = unavailable;
     button.setAttribute("aria-disabled", String(unavailable || working));
     const active = status?.mode === button.dataset.mode;
@@ -635,8 +495,6 @@ function renderControls() {
     const indicator = button.querySelector(".mode-state");
     if (indicator) indicator.textContent = active ? "Đang chiếu" : "";
   });
-  byId("quota-link").classList.toggle("quota-active", providers.includes(status?.mode));
-  byId("quota-link").querySelector(".mode-state").textContent = providers.includes(status?.mode) ? "Đang chiếu" : "";
   byId("countdown-fields").disabled = !ready || working || !status?.countdown;
   byId("timer-actions").disabled = !ready || !status?.pomodoro;
   timerButtons.forEach((button) => {
@@ -705,6 +563,14 @@ function messageCount() {
 }
 
 function fillConfig(next) {
+  const { startupMode, rotation } = next;
+  const supported = rotation.modes.filter((mode) => Object.hasOwn(modeNames, mode));
+  if (!Object.hasOwn(modeNames, startupMode) || supported.length !== rotation.modes.length) {
+    next = {
+      ...next, startupMode: Object.hasOwn(modeNames, startupMode) ? startupMode : "github",
+      rotation: { ...rotation, enabled: rotation.enabled && supported.length >= 2, modes: supported.length ? supported : ["github"] },
+    };
+  }
   const currentModes = !!status?.countdown;
   const startup = settingsForm.elements.startupMode;
   [...startup.options].forEach((option) => {
@@ -788,7 +654,7 @@ async function poll() {
     const response = await request("status", undefined, read.signal);
     if (expectedRevision !== revision) return;
     const next = response.data;
-    if (!modeNames[next.mode] || !next.wifi || !next.time || !next.github) {
+    if (typeof next.mode !== "string" || !next.wifi || !next.time || !next.github) {
       throw new Error("Phản hồi trạng thái thiếu dữ liệu cần thiết.");
     }
     const rebooted = restartUntil !== 0 || next.uptimeSeconds < (status?.uptimeSeconds ?? 0);
@@ -826,7 +692,7 @@ async function poll() {
       }
     }
     void refreshGithub(expectedRevision);
-    void readIntegrations();
+    void readCalendar();
   } catch (error) {
     if (expectedRevision !== revision) return;
     online = false;
@@ -850,7 +716,6 @@ const remoteErrors = {
 
 function setSignedIn(value) {
   signedIn = value;
-  syncQuotaMotion();
   byId("auth").hidden = value;
   byId("main").hidden = !value;
   byId("logout").hidden = !value;
@@ -863,11 +728,10 @@ function setSignedIn(value) {
     status = config = github = remoteCommand = undefined;
     renderCalendar();
     remoteConnection = "offline";
-    integrations = undefined;
-    integrationAt = -Infinity;
+    calendarSnapshot = undefined;
+    calendarReadAt = -Infinity;
     countdownDraft = false;
     selectedMonth = undefined;
-    renderQuotas();
     label("offline-message", "");
     for (const id of ["device-name", "wifi-status", "wifi-ip", "wifi-hostname", "active-mode", "firmware", "uptime", "time-status", "github-sync"]) label(id, "—");
     label("timer-remaining", "--:--");
@@ -877,7 +741,7 @@ function setSignedIn(value) {
     settingsForm.reset();
     byId("wifi-hostname").hidden = true;
     byId("wifi-ip").hidden = false;
-    for (const id of ["mode-feedback", "timer-feedback", "message-feedback", "settings-feedback", "calendar-feedback", "quota-feedback", "countdown-feedback"]) feedback(id);
+    for (const id of ["mode-feedback", "timer-feedback", "message-feedback", "settings-feedback", "calendar-feedback", "countdown-feedback"]) feedback(id);
     renderStatus();
     lastSeenAt = undefined;
     messageDirty = settingsDirty = false;
@@ -920,7 +784,7 @@ async function pollRemote() {
       ? "ESP32 chưa cập nhật gần đây. Điều khiển tạm khóa."
       : "Chưa nhận được kết nối từ ESP32.") + seen);
     renderStatus();
-    void readIntegrations();
+    void readCalendar();
   } catch (error) {
     if (expected !== revision) return;
     online = false;
@@ -1118,7 +982,7 @@ function selectMode(mode, target) {
 }
 
 modes.forEach((button) => button.addEventListener("click", () => {
-  selectMode(button.dataset.mode, providers.includes(button.dataset.mode) ? "quota-feedback" : "mode-feedback");
+  selectMode(button.dataset.mode, "mode-feedback");
 }));
 byId("show-message").addEventListener("click", () => selectMode("message", "message-feedback"));
 timerButtons.forEach((button) => {
@@ -1234,7 +1098,6 @@ byId("retry").addEventListener("click", () => schedulePoll(0));
 reducedMotion.addEventListener("change", (event) => {
   if (event.matches) previewCanvas.getAnimations().forEach((animation) => animation.cancel());
   syncPetMotion();
-  syncQuotaMotion();
 });
 petMotionButton.addEventListener("click", () => {
   petPaused = !petPaused;
@@ -1246,12 +1109,11 @@ new IntersectionObserver(([entry]) => {
 }).observe(previewCanvas);
 document.addEventListener("visibilitychange", () => {
   syncPetMotion();
-  syncQuotaMotion();
   if (!document.hidden) schedulePoll(0);
 });
 setInterval(() => {
   if (!document.hidden && status) renderTick();
 }, 500);
-showView();
+redirectRetiredPage();
 if (remote) initRemote();
 else { byId("main").hidden = false; poll(); }

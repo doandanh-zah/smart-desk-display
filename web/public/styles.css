@@ -76,7 +76,6 @@ main { padding-block: 20px 52px; }
 .icon-clock::after, .icon-timer::after { width: 5px; height: 6px; border-left: 1px solid; border-bottom: 1px solid; transform: translate(2px, -2px); }
 .icon-timer::before { margin-top: 3px; }
 .icon-timer::after { box-shadow: -3px -8px 0 -2px; }
-.icon-stats::before { width: 3px; height: 11px; background: currentColor; box-shadow: -5px 3px, 5px -3px; }
 .icon-message::before { width: 17px; height: 13px; border: 1px solid; border-radius: 2px; }
 .icon-message::after { width: 7px; height: 1px; background: currentColor; box-shadow: 0 3px; margin-top: -3px; }
 #active-mode { color: var(--accent); }
@@ -204,22 +203,6 @@ dialog .actions { justify-content: flex-end; }
 }
 .calendar-grid { background: var(--github-panel); }
 .mode-card { text-decoration: none; }
-#quota-link[aria-current="page"], #quota-link.quota-active { border-color: var(--accent); color: var(--accent); }
-.quota-back { text-decoration: none; }
-.quota-intro { margin: 18px 0 10px; }
-.quota-intro h2 { font-size: clamp(1.7rem, 4vw, 2.4rem); }
-.quota-actions { margin-top: 9px; }
-.quota-grid { display: grid; gap: 12px; }
-.quota-card { padding: 14px; }
-.quota-card header { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
-.quota-card h3 { font-size: 1.25rem; }
-.quota-send { margin-block: 12px 7px; }
-.quota-send[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-.quota-window { padding-block: 9px; border-bottom: 1px solid var(--line); }
-.quota-window p { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
-.quota-window meter { width: 100%; height: 12px; display: block; margin-block: 4px; accent-color: var(--accent); }
-.quota-mascot { width: 48px; height: 48px; display: grid; place-items: center; }
-.quota-mascot canvas { width: 48px; height: 48px; aspect-ratio: 1; background: transparent; }
 .month-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .month-grid { table-layout: fixed; border-spacing: 3px; width: 100%; text-align: center; margin-block: 8px; font-variant-numeric: tabular-nums; }
 .month-grid td { height: 30px; }
@@ -228,12 +211,9 @@ dialog .actions { justify-content: flex-end; }
 #month-source { margin-top: 8px; }
 .calendar-events { padding-inline-start: 20px; margin-block: 8px 0; }
 .calendar-events li { overflow-wrap: anywhere; padding-block: 4px; }
-@media (min-width: 38rem) { .quota-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .legacy-modes { margin-bottom: 10px; }
 #legacy-tools .disclosure + .disclosure { margin-top: 8px; }
 
-@media (max-width: 49.99rem) { .mode-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-.quota-detail { display: block; margin-top: 6px; overflow-wrap: anywhere; }
 #calendar-connect-actions { margin-top: 8px; }

@@ -61,8 +61,9 @@ window.deskTransport = (() => {
       await exchange("/api/auth/logout", {}, true);
       csrfToken = undefined;
     },
-    async integrations() {
-      return (await exchange("/api/admin/integrations")).data;
+    async readCalendar() {
+      const { data } = await exchange("/api/admin/integrations");
+      return data.calendar;
     },
     async calendar(action) {
       return (await exchange(`/api/admin/calendar/${action}`, {}, true)).data;

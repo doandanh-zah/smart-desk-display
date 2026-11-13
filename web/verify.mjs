@@ -375,99 +375,56 @@ try {
     await countdown.getByRole("button", { name: "Đặt lại" }).click();
     await expectText(page, "#countdown-state", "Sẵn sàng");
 
-    const quota = page.getByRole("link", { name: "Quota", exact: true });
-    await quota.focus();
-    await page.keyboard.press("Enter");
-    await page.locator("#quota-title").waitFor();
-    assert.equal(await page.locator("#dashboard-view").isVisible(), false);
-    await expectText(page, "#quota-codex-state", "Chưa kết nối");
-    await expectText(page, "#quota-claude-state", "Không hỗ trợ");
-    assert.equal(await page.locator("#quota-view meter").count(), 0);
-    await page.route("**/api/integrations", async (route) => {
-      const response = await route.fetch();
-      const data = await response.json();
-      const now = Math.floor(Date.now() / 1000);
-      data.quotas.codex = {
-        state: "live", observedAt: now - 901, credit: { balance: "12.5", unit: "credits" }, resetCredits: { availableCount: 2 },
-        windows: [{ id: "primary", usedPercent: 37, windowMinutes: 300, resetsAt: now + 300 }],
-      };
-      data.quotas.claude = {
-        state: "live", observedAt: now,
-        windows: [{ id: "five_hour", usedPercent: null, windowMinutes: 300, resetsAt: null }],
-      };
-      await route.fulfill({ response, json: data });
+    const oldRequests = [];
+    page.on("request", (request) => {
+      if (/\/api\/(quota|integrations)/.test(new URL(request.url()).pathname)) oldRequests.push(request.url());
     });
-    await button(page, "Làm mới").click();
-    await expectText(page, "#quota-codex-state", "Dữ liệu đã cũ");
-    await expectText(page, "#quota-codex-windows", "Còn 63%");
-    await expectText(page, "#quota-codex-windows", /Codex App Server · 12.5 credits/);
-    await expectText(page, "#quota-codex-windows", /Lượt đặt lại được cấp · 2/);
-    await page.locator("#quota-claude-windows").getByText("Chưa có tỷ lệ sử dụng", { exact: true }).first().waitFor();
-    assert.equal(await page.locator("#quota-claude-windows meter").count(), 0);
-    assert.equal(await page.locator("#quota-view meter").count(), 1);
-    const mascot = (provider) => page.locator(`.${provider}-mascot canvas`);
-    const samples = async () => Promise.all(["codex", "claude"].map((provider) => mascot(provider).evaluate((el) => el.toDataURL())));
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.waitForTimeout(100);
-    const neutral = await samples();
-    assert.notEqual(neutral[0], neutral[1]);
-    await page.waitForTimeout(1800);
-    assert.deepEqual(await samples(), neutral);
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.waitForFunction((before) => [...document.querySelectorAll(".quota-mascot canvas")].every((el, index) => el.toDataURL() !== before[index]), neutral, { timeout: 4700, polling: 50 });
-    await page.route("**/api/integrations", async (route) => {
-      const response = await route.fetch();
-      const data = await response.json();
-      const now = Math.floor(Date.now() / 1000);
-      data.quotas.codex = {
-        state: "stale", observedAt: now - 1000,
-        credit: { balance: null, hasCredits: true, unlimited: false, unit: "credits" },
-        resetCredits: { availableCount: 1, expiresAt: now + 86400 },
-        windows: [
-          { id: "primary", windowMinutes: 300, usedPercent: 100, unit: null, resetsAt: now - 10 },
-          { id: "secondary", windowMinutes: 10080, usedPercent: 16, unit: null, resetsAt: now + 86400 },
-        ],
-      };
-      data.quotas.claude = {
-        state: "live", observedAt: now,
-        windows: [
-          { id: "five_hour", windowMinutes: 300, usedPercent: 0, unit: null, resetsAt: null },
-          { id: "seven_day", windowMinutes: 10080, usedPercent: null, unit: null, resetsAt: null },
-        ],
-      };
-      await route.fulfill({ response, json: data });
-    });
-    await button(page, "Làm mới").click();
-    await expectText(page, "#quota-codex-windows", "Còn 0%");
-    await expectText(page, "#quota-codex-windows", "Còn 84%");
-    await expectText(page, "#quota-codex-windows", /Có credit · chưa có số dư/);
-    await expectText(page, "#quota-codex-windows", /Lượt đặt lại được cấp · 1 · Hết hạn/);
-    await expectText(page, "#quota-claude-windows", "Còn 100%");
-    assert.equal(await page.locator("#quota-claude-windows meter").count(), 1);
-    await page.evaluate(() => {
-      const ctx = document.querySelector("#preview").getContext("2d");
-      const original = ctx.fillText.bind(ctx);
-      window.previewLabels = [];
-      ctx.fillText = (value, ...args) => {
-        window.previewLabels.push(value);
-        original(value, ...args);
-      };
-    });
-    await button(page, "Hiển thị Codex trên TFT").click();
-    await expectText(page, "#quota-feedback", "Đã chọn Quota Codex.");
-    const previewLabels = await page.evaluate(() => window.previewLabels);
-    for (const value of ["100%", "16%", "STALE", "CREDIT AVAILABLE"]) assert.ok(previewLabels.includes(value), value);
-    assert.ok(previewLabels.some((value) => /Updated .* ICT \/ R: 1$/.test(value)));
-    await button(page, "Hiển thị Claude trên TFT").click();
-    await expectText(page, "#quota-feedback", "Đã chọn Quota Claude.");
-    assert.equal((await api(origin, "status")).mode, "claude");
-    await page.getByRole("link", { name: "← Điều khiển" }).click();
-    await expectText(page, "#active-mode", "Quota Claude");
-    assert.equal(await quota.evaluate((el) => el === document.activeElement), true);
+    await page.goto(origin + "/#quota");
+    await expectText(page, "#active-mode", "Đếm ngược");
+    assert.equal(new URL(page.url()).hash, "");
+    assert.equal(await page.locator('#mode-list button').count(), 3);
+    assert.equal(await page.getByRole("link", { name: "Quota", exact: true }).count(), 0);
+    await page.getByRole("link", { name: "Cài đặt" }).click();
+    assert.deepEqual(await page.getByLabel("Chế độ khi khởi động").evaluate((el) =>
+      [...el.options].filter((option) => !option.hidden).map((option) => option.value)
+    ), ["github", "clock", "countdown"]);
+    const rotation = page.getByRole("group", { name: "Luân phiên chế độ" });
+    assert.deepEqual(await rotation.locator('input[name="rotationMode"]:visible').evaluateAll((items) =>
+      items.map((item) => item.value)
+    ), ["github", "clock", "countdown"]);
+    assert.deepEqual(oldRequests, []);
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
     }
+  });
+
+  await withFixture("modes-v2", async (page, origin) => {
+    await page.route("**/api/status", async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      await route.fulfill({ response, json: { ...data, mode: "codex" } });
+    });
+    await page.route("**/api/config", async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      await route.fulfill({ response, json: {
+        ...data, startupMode: "claude",
+        rotation: { ...data.rotation, enabled: true, modes: ["codex", "claude"] },
+      } });
+    });
+    const writes = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST") writes.push(request.url());
+    });
+    await page.goto(origin + "/?legacy=1#quota");
+    await expectText(page, "#active-mode", "Chế độ cũ");
+    assert.equal(page.url(), origin + "/?legacy=1");
+    assert.equal(await mode(page, "Đóng góp GitHub").isEnabled(), true);
+    await page.getByRole("link", { name: "Cài đặt" }).click();
+    assert.equal(await page.getByLabel("Chế độ khi khởi động").inputValue(), "github");
+    assert.equal(await page.getByLabel("Bật tự động luân phiên").isChecked(), false);
+    assert.deepEqual(writes, []);
   });
 
   const session = { authenticated: true, csrfToken: "fixture-csrf", expiresAt: 2000000000 };
@@ -487,7 +444,7 @@ try {
   async function installRemote(page, origin) {
     const [status, config, github] = await Promise.all(["status", "config", "github"].map((path) => api(origin, path)));
     snapshot = { status, config, github };
-    config.rotation.modes = ["github", "clock", "countdown", "codex", "claude"];
+    config.rotation.modes = ["github", "clock", "countdown"];
     status.countdown = { kind: "duration", state: "idle", durationSeconds: 1500, targetEpochSeconds: null, remainingSeconds: 1500 };
     status.wifi.ip = status.wifi.hostname = null;
     delete config.githubProxyUrl;
@@ -513,7 +470,7 @@ try {
         return json({ ok: true });
       }
       if (path === "/api/admin/integrations") return json({
-        v: 1, calendar: { state: "unavailable", events: [], canConnect: true, connected: calendarConnected }, quotas: {},
+        v: 1, calendar: { state: "unavailable", events: [], canConnect: true, connected: calendarConnected },
       });
       if (path === "/api/admin/calendar/connect") {
         calendarConnected = true;

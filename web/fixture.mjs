@@ -19,8 +19,8 @@ const scenarios = new Set(["demo", ...githubScenarios, "unsynced", "reject", "of
 const scenario = process.env.FIXTURE_SCENARIO || "demo";
 const versionTwo = scenario === "modes-v2";
 if (versionTwo) {
-  modes.push("countdown", "codex", "claude");
-  config.rotation.modes = ["github", "clock", "countdown", "codex", "claude"];
+  modes.push("countdown");
+  config.rotation.modes = ["github", "clock", "countdown"];
 }
 let countdown = { kind: "duration", state: "idle", durationSeconds: 1500, targetEpochSeconds: null, remainingSeconds: 1500 };
 let countdownEnds;
@@ -105,18 +105,11 @@ function countdownSample(now) {
   return countdown;
 }
 
-function integrations() {
+function calendar() {
   const now = Math.floor(Date.now() / 1000);
   return {
-    v: 1,
-    calendar: {
-      source: "google_calendar", state: "live", observedAt: now, timeZone: "Asia/Ho_Chi_Minh",
-      events: [{ title: "Sự kiện kiểm thử", start: now + 3600, end: now + 7200, allDay: false }],
-    },
-    quotas: {
-      codex: { source: "codex_app_server", kind: "subscription", state: "unavailable", observedAt: null, windows: [] },
-      claude: { source: "claude_code_statusline", kind: "subscription", state: "unsupported", observedAt: null, windows: [] },
-    },
+    source: "google_calendar", state: "live", observedAt: now, timeZone: "Asia/Ho_Chi_Minh",
+    events: [{ title: "Sự kiện kiểm thử", start: now + 3600, end: now + 7200, allDay: false }],
   };
 }
 
@@ -286,7 +279,7 @@ async function route(req, res) {
 
   if (req.method === "GET") {
     if (versionTwo && path === "/api/countdown") return reply(res, 200, countdownSample(now));
-    if (versionTwo && path === "/api/integrations") return reply(res, 200, integrations());
+    if (versionTwo && path === "/api/calendar") return reply(res, 200, calendar());
     if (path === "/api/status") return reply(res, 200, status(now));
     if (path === "/api/config") return reply(res, 200, config);
     if (path === "/api/github") return reply(res, 200, githubData());

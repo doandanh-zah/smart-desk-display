@@ -1,70 +1,5 @@
 "use strict";
 
-window.paintDeskQuotaPet = (() => {
-  // Mirrors firmware/src/display/QuotaPets.h.
-  const sprites = {
-    codex: { s: "#8975eb", g: "#9beaff", d: "#302458", rows: [
-      ".......g........",
-      ".......s........",
-      "......sss.......",
-      "....ssssssss....",
-      "...ssssssssss...",
-      "..ssddddddddss..",
-      ".sssddgddgddsss.",
-      ".sssddgddgddsss.",
-      "..ssddddddddss..",
-      "...ssssssssss...",
-      "....ssssssss....",
-      ".....s...s......",
-      "....sss.sss.....",
-      "...ssss.ssss....",
-      "................",
-      "................",
-    ] },
-    claude: { s: "#df8054", g: "#ffe2ac", d: "#582c21", rows: [
-      "...s...s....s...",
-      "................",
-      "s.....ssss.....s",
-      "....ssssssss....",
-      "...ssssssssss...",
-      "...ssssssssss...",
-      "..ssssssssssss..",
-      "s.sssdssssds.s.s",
-      "..ssggssssggss..",
-      "..ssssddddssss..",
-      "...ssssssssss...",
-      "...ssssssssss...",
-      "....ssssssss....",
-      "s.....ssss.....s",
-      "................",
-      "...s...s....s...",
-    ] },
-  };
-  return (ctx, provider, elapsed, ox = 0, oy = 0) => {
-    const sprite = sprites[provider];
-    const phase = elapsed % 3600;
-    const motion = phase >= 1600 && phase < 1900;
-    ctx.clearRect(ox, oy, 48, 48);
-    sprite.rows.forEach((row, y) => {
-      for (let x = 0; x < row.length; x += 1) {
-        let value = row[x];
-        if (motion && provider === "codex") {
-          if (y === 0 && (x === 6 || x === 8)) value = "g";
-          if (y === 6 && (x === 6 || x === 9)) value = "d";
-        }
-        if (motion && provider === "claude") {
-          if (y === 7 && (x === 5 || x === 10)) value = "s";
-          if (y === 8 && (x === 5 || x === 10)) value = "d";
-          if ((y === 1 || y === 14) && (x === 2 || x === 13)) value = "g";
-        }
-        if (value === ".") continue;
-        ctx.fillStyle = sprite[value];
-        ctx.fillRect(ox + x * 3, oy + y * 3, 3, 3);
-      }
-    });
-  };
-})();
-
 window.createDeskPreview = function createDeskPreview(canvas) {
   const ctx = canvas.getContext("2d");
   const palettes = {
@@ -327,42 +262,6 @@ window.createDeskPreview = function createDeskPreview(canvas) {
     text(when, 160, 168, 10, color.muted, "center");
   }
 
-  function quota(provider, data, theme) {
-    const accent = provider === "codex"
-      ? (theme === "light" ? "#5940a2" : "#b6a7ff")
-      : (theme === "light" ? "#9c411d" : "#f9a977");
-    const state = sourceStatus(data);
-    text(provider.toUpperCase(), 85, 19, 30, color.text);
-    text("SUBSCRIPTION USAGE", 85, 46, 10, accent);
-    box(16, 68, 288, 1, color.line);
-    box(16, 202, 288, 1, color.line);
-    const windows = ["LIVE", "STALE"].includes(state) ? data.windows || [] : [];
-    const remainingWindows = [300, 10080].map((minutes) => windows.find((entry) => entry.windowMinutes === minutes ||
-      (entry.windowMinutes == null && entry.id === (minutes === 300 ? "five_hour" : "seven_day"))));
-    for (let index = 0; index < 2; index += 1) {
-      const window = remainingWindows[index];
-      const y = 77 + 60 * index;
-      text(index === 0 ? "5H USAGE" : "7D USAGE", 16, y, 10, color.muted);
-      const used = window?.usedPercent;
-      const known = Number.isFinite(used) && used >= 0 && used <= 100;
-      text(known ? `${Math.round(used)}%` : "--", 304, y, 20, accent, "right");
-      box(16, y + 20, 288, 6, color.surface);
-      if (known) box(16, y + 20, Math.floor(288 * used / 100), 6, accent);
-      text(window?.resetsAt ? `Reset ${ictStamp(window.resetsAt)} ICT` : "Reset --", 16, y + 34, 10, color.muted);
-    }
-    text(state, 16, 213, 10, state === "STALE" ? color.warning : state === "ERROR" ? color.error : color.muted);
-    const credit = provider === "codex" && ["LIVE", "STALE"].includes(state) ? data.credit : null;
-    const balance = credit?.unit === "credits" && typeof credit.balance === "string" && /^\d+(?:\.\d+)?$/.test(credit.balance) && credit.balance.length <= 20;
-    text(credit?.unlimited ? "CREDIT UNLIMITED" : balance ? `CREDIT ${credit.balance}` : credit?.hasCredits === true ? "CREDIT AVAILABLE" : credit?.hasCredits === false ? "CREDIT NONE" : "CREDIT N/A", 304, 213, 10, color.muted, "right");
-    if (["LIVE", "STALE"].includes(state)) {
-      const details = [];
-      if (data.observedAt) details.push(`Updated ${ictStamp(data.observedAt)} ICT`);
-      const count = provider === "codex" ? data.resetCredits?.availableCount : null;
-      if (Number.isInteger(count) && count >= 0) details.push(`R: ${count}`);
-      if (details.length) text(details.join(" / "), 16, 226, 10, color.muted);
-    }
-  }
-
   function clock(localEpoch, showSeconds, deviceName, wifi) {
     frame("CLOCK", deviceName, localEpoch == null ? "ICT / UTC+7   NTP PENDING" : "ICT / UTC+7   NTP SYNCED");
     text(wifi?.connected ? wifi.ip || "" : "Wi-Fi disconnected", 16, 230, 9, color.muted);
@@ -448,12 +347,6 @@ window.createDeskPreview = function createDeskPreview(canvas) {
         else clock(frameData.localEpoch, frameData.showSeconds, frameData.deviceName, frameData.wifi);
         break;
       case "countdown": countdown(frameData.countdown, frameData.deviceName); break;
-      case "codex":
-      case "claude":
-        quota(frameData.mode, frameData.quota, frameData.theme);
-        previousPetPose = undefined;
-        render.pet(petElapsed);
-        break;
       case "pomodoro": pomodoro(frameData.timer, frameData.deviceName, frameData.wifi); break;
       case "message": message(frameData.message, frameData.deviceName, frameData.wifi); break;
       default: text("SMART DESK DISPLAY", 160, 114, 14, color.muted, "center");
@@ -464,17 +357,6 @@ window.createDeskPreview = function createDeskPreview(canvas) {
     if (elapsed === undefined) return;
     petElapsed = elapsed;
     if (!ctx) return;
-    if (previousMode === "codex" || previousMode === "claude") {
-      const phase = elapsed % 3600;
-      const pose = phase >= 1600 && phase < 1900;
-      if (pose === previousPetPose) return;
-      previousPetPose = pose;
-      window.paintDeskQuotaPet(ctx, previousMode, elapsed, 16, 16);
-      ctx.globalCompositeOperation = "destination-over";
-      box(16, 16, 48, 48, color.bg);
-      ctx.globalCompositeOperation = "source-over";
-      return;
-    }
     if (previousMode !== "github") return;
     const pose = githubPetPose(elapsed);
     if (pose === previousPetPose) return;
