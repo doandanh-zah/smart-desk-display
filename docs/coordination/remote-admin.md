@@ -78,3 +78,8 @@
 
 - Hai biến `GOOGLE_CALENDAR_CLIENT_ID` và `GOOGLE_CALENDAR_CLIENT_SECRET` đã lưu dưới dạng Sensitive chỉ ở Production, cùng khóa mã hóa OAuth đã có. Triển khai lại đúng bundle `e4b5e1e` để áp dụng cấu hình. [Deployment READY](https://vercel.com/lilzahs-projects/smart-desk-remote-admin/3Uyza4fPhDeqPGoXzZQCjVU1dWg1).
 - Smoke 11/11 trên canonical, thêm callback thiếu state bị từ chối (303) và connect thiếu phiên admin trả 401. Log `.dev/logs/remote-admin-google-oauth-smoke.log`. Chưa xác nhận Google consent hoặc sự kiện thật. Cấu hình xuất lịch lên ESP32 giữ ở mặc định.
+
+## Production 1.2.1 · 16:27 ICT
+
+- Deploy bundle từ cùng SHA nạp `d2da7a9984073462e72d42bc196c08e02c91ba7e` bằng git archive và staging trên SSD. [Deployment READY](https://vercel.com/lilzahs-projects/smart-desk-remote-admin/B22QQkiiig1QjXZ8C34iYUVqmxuo) tại `desk.thezah.space`. Sáu asset khớp SHA-1 với staging. Redis local 13/13, smoke active 11/11, Google OAuth callback được bật và từ chối yêu cầu thiếu state.
+- ESP32 LAN trả firmware 1.2.1. Một mẫu Codex thật mới publish qua deployment này đến ESP32. Hai bản tóm tắt Mac và LAN khớp observedAt, cửa sổ 5h/7d, reset và sự hiện diện của credit/reset-credit. Log `.dev/logs/remote-admin-d2da7a9-codex-{publish,lan}.json`. Chờ 06 ghi kết quả đo command ACK.
