@@ -24,7 +24,11 @@ private:
     display::QuotaData quotas_[2];
     char titles_[3][65] = {};
     char timeZone_[65] = "Asia/Ho_Chi_Minh";
-    uint32_t minutes_[2][2] = {};
+    struct CreditDetails {
+        uint64_t resetAt = 0;
+        uint64_t resetCreditsExpireAt = 0;
+        char balance[65] = {};
+    } codexCredit_;
     double percentages_[2][2] = {{-1, -1}, {-1, -1}};
 };
 

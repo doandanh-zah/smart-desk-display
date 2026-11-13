@@ -144,3 +144,25 @@ Build tích hợp đạt với renderer mode v2. RAM tĩnh 54.276/327.680 byte (
 | `partitions.bin` | `6a88d59601a83a16a19a08114b59d338324b8dec267d8b43e5d61ad56ec92102` |
 
 Phiên firmware chưa flash hay mở serial. Khi nghiệm thu bản tích hợp, giữ NVS, nạp LittleFS phù hợp với web v2, kiểm tra migration từ cấu hình thật, GitHub live, clock ICT khi offline, countdown khi đóng browser và sau reboot, cloud ACK, cùng heap/stack qua script USB `--status` với payload Calendar/quota thật. Nguồn thật cần OAuth Calendar và bridge quota theo phiên backend. Fixture không xác nhận các nguồn đó đã được kết nối.
+
+## Bàn giao độ trễ và quota · firmware 1.2.1
+
+[Baseline LAN/cloud, mục tiêu p50/p95, budget và rollback](firmware-latency.md). Firmware chỉ theo hint 3 giây hợp lệ, mặc định 20 giây. Giữ ACK nhanh, backoff, TLS, bảo vệ heap và phân lịch với GitHub. Kỳ đầu khi mở dashboard có thể vẫn đợi lịch 20 giây trước đó.
+
+Quota giữ đúng `windowMinutes`, phần trăm và reset nguồn. TFT dùng duration thật để định danh 5h/7d, có fallback từ ID chính thức Claude khi không có duration. Codex credit/reset credit lấy từ projection v1 mở rộng. LAN giữ chuỗi thập phân và epoch gốc trong giới hạn cache. Thiếu trường hoặc nguồn không hỗ trợ trả null, kể cả credit của Claude. Quota tới mốc reset/hết hạn nguồn được đánh dấu stale, không tự suy ra số dư mới.
+
+- Fixture host qua UBSan kiểm 3s/20s, thiếu hint và sai kiểu, ACK 1s, chặn 600 poll, rollover, lệnh hết hạn, replay/ACK sau reboot. Quota fixture kiểm độ dài window, credit số lẻ, reset credit, expiry, trường sai, thiếu trường từ backend cũ và Claude null. Projection tạo qua backend thật với nguồn giả cho 3 lịch, 4 quota window, Codex credit/reset và Claude null chiếm 1.485 byte, dưới ngân sách 2 KiB. Log `.dev/logs/firmware-latency-{quota-host,receive,quota-projection}.log`.
+- Build tích hợp hiện tại đạt cùng renderer mới. RAM tĩnh 54.404/327.680 byte (16,6%), flash ứng dụng 1.172.553/2.097.152 byte (55,9%). Log build trước commit ở `.dev/logs/firmware-latency-quota-commit-build.log`. 06 build lại từ commit tích hợp cuối và xác nhận checksum trước khi 01 nạp. Heap TLS và latency warm/cold sau cập nhật chờ nghiệm thu thiết bị thật, phiên firmware chưa flash.
+
+```sh
+cd /Volumes/SmartDeskDev/smart-desk-display
+source .dev/env.sh
+PLATFORMIO_BUILD_DIR="$SMART_DESK_DEV/firmware-latency-quota" pio run -d firmware -j 3
+shasum -a 256 "$SMART_DESK_DEV"/firmware-latency-quota/esp32doit-devkit-v1/{firmware,bootloader,partitions}.bin
+```
+
+| Ảnh trong `.dev/firmware-latency-quota/esp32doit-devkit-v1/` | SHA-256 |
+| --- | --- |
+| `firmware.bin` | `7b91fb362c242762b997d8dc07777279504189f8fbe08b2b8e0530cb27ba8811` |
+| `bootloader.bin` | `3d234a7471f67b013686dabd4dee7c1fa915c9928463616a94bc9297acf1abf8` |
+| `partitions.bin` | `6a88d59601a83a16a19a08114b59d338324b8dec267d8b43e5d61ad56ec92102` |

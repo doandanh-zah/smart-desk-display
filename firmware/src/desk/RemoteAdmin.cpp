@@ -21,7 +21,7 @@ constexpr char statusCommand[] = "desk-remote-status";
 constexpr uint32_t heapCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
 constexpr size_t requestLimit = 6144;
 constexpr size_t responseLimit = 4096;
-constexpr uint32_t pollMs = 20000;
+constexpr uint32_t pollMs = remote::PollSchedule::idleMs;
 constexpr uint32_t maxRetryMs = 300000;
 constexpr uint32_t workerStack = 10240;
 constexpr int networkTimeoutMs = 5000;
@@ -152,6 +152,7 @@ void RemoteAdmin::tick(App& app, bool online, time_t epoch, uint32_t now) {
         request_ = String();
         const auto before = journal_.latest;
         const bool wasPending = journal_.pending;
+        pollHintMs_ = pollMs;
         const bool ok = transportOk && online && epoch > 0 && receive(app, static_cast<uint64_t>(epoch));
         if (askedIntegrations_) {
             if (!ok && diagnostics_.httpStatus == 400) {
@@ -163,7 +164,7 @@ void RemoteAdmin::tick(App& app, bool online, time_t epoch, uint32_t now) {
         }
         response_ = String();
         const bool newAck = journal_.pending && (!wasPending || strcmp(before.id, journal_.latest.id) != 0);
-        nextAttempt_ = now + (ok ? (newAck ? 1000 : pollMs) : retryMs_);
+        nextAttempt_ = now + (ok ? pollSchedule_.afterSuccess(now, newAck, pollHintMs_) : retryMs_);
         retryMs_ = ok ? pollMs : std::min(retryMs_ * 2, maxRetryMs);
     }
 
@@ -203,6 +204,7 @@ bool RemoteAdmin::receive(App& app, uint64_t now) {
 
     const auto ack = response["ackId"].as<JsonVariantConst>();
     if (!ack.isNull() && !remote::hex(ack, remote::idLength)) return false;
+    pollHintMs_ = remote::PollSchedule::hint(response["pollAfterMs"]);
     const auto integrations = response["integrations"].as<JsonVariantConst>();
     if (!integrations.isNull()) app.updateIntegrations(integrations, std::max(now, serverTime));
     if (journal_.pending) {

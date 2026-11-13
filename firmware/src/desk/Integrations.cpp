@@ -51,6 +51,27 @@ bool copyText(JsonVariantConst input, char (&buffer)[Capacity]) {
     return true;
 }
 
+bool decimalBalance(JsonVariantConst input, char (&out)[65]) {
+    if (input.isNull()) return true;
+    if (!copyText(input, out)) return false;
+    bool dot = false;
+    unsigned digits = 0;
+    for (const char* ch = out; *ch; ++ch) {
+        if (*ch >= '0' && *ch <= '9') ++digits;
+        else if (*ch == '.' && !dot && digits && ch[1]) dot = true;
+        else return false;
+    }
+    return digits != 0;
+}
+
+bool optionalEpoch(JsonVariantConst input, uint64_t& out) {
+    if (!input.isNull() && (!input.is<uint64_t>() || !input.as<uint64_t>() || input.as<uint64_t>() > maxEpoch)) {
+        return false;
+    }
+    out = input.as<uint64_t>();
+    return true;
+}
+
 void writeEpoch(JsonObject out, const char* key, uint64_t value) {
     if (value) out[key] = value;
     else out[key] = nullptr;
@@ -118,8 +139,30 @@ bool Integrations::update(JsonVariantConst input, uint64_t now) {
             strcpy(window.label, windowIds[provider][slot]);
             window.usedPercent = used < 0 ? -1 : static_cast<int16_t>(used + 0.5);
             window.resetEpochSeconds = reset.as<uint64_t>();
+            window.windowMinutes = minutes.as<uint32_t>();
             next.percentages_[provider][index] = used;
-            next.minutes_[provider][index] = minutes.as<uint32_t>();
+        }
+
+        if (provider != 0) continue;
+        const auto credit = quota["credit"];
+        if (!credit.isNull()) {
+            CreditDetails candidate;
+            if (credit["unit"].as<JsonString>() == "credits" && credit["hasCredits"].is<bool>() &&
+                credit["unlimited"].is<bool>() && decimalBalance(credit["balance"], candidate.balance) &&
+                optionalEpoch(credit["resetsAt"], candidate.resetAt)) {
+                next.codexCredit_ = candidate;
+                target.creditAvailable = true;
+                target.hasCredits = credit["hasCredits"].as<bool>();
+                target.creditUnlimited = credit["unlimited"].as<bool>();
+                if (strlen(candidate.balance) < sizeof(target.creditBalance)) {
+                    strcpy(target.creditBalance, candidate.balance);
+                }
+            }
+        }
+        const auto resets = quota["resetCredits"];
+        if (!resets.isNull() && resets["availableCount"].is<int32_t>() && resets["availableCount"].as<int32_t>() >= 0 &&
+            optionalEpoch(resets["expiresAt"], next.codexCredit_.resetCreditsExpireAt)) {
+            target.resetCredits = resets["availableCount"].as<int32_t>();
         }
     }
     next.tick(now);
@@ -144,6 +187,13 @@ void Integrations::tick(uint64_t now) {
                 ++count;
             }
             calendar_.count = count;
+        }
+    }
+    if (usable(quotas_[0].state)) {
+        if (codexCredit_.resetAt && now >= codexCredit_.resetAt) quotas_[0].state = SourceState::Stale;
+        if (codexCredit_.resetCreditsExpireAt && now >= codexCredit_.resetCreditsExpireAt) {
+            // Only the earliest expiry is known. Keep the last observed count with a stale label.
+            quotas_[0].state = SourceState::Stale;
         }
     }
     for (auto& quota : quotas_) {
@@ -182,12 +232,28 @@ void Integrations::writeQuota(JsonObject out, unsigned provider) const {
     out["kind"] = "subscription";
     out["state"] = stateName(quota.state);
     writeEpoch(out, "observedAt", quota.updatedAt);
+    out["credit"] = nullptr;
+    out["resetCredits"] = nullptr;
+    if (provider == 0 && quota.creditAvailable) {
+        auto credit = out["credit"].to<JsonObject>();
+        if (codexCredit_.balance[0]) credit["balance"] = codexCredit_.balance;
+        else credit["balance"] = nullptr;
+        credit["unit"] = "credits";
+        credit["hasCredits"] = quota.hasCredits;
+        credit["unlimited"] = quota.creditUnlimited;
+        writeEpoch(credit, "resetsAt", codexCredit_.resetAt);
+    }
+    if (provider == 0 && quota.resetCredits >= 0) {
+        auto resets = out["resetCredits"].to<JsonObject>();
+        resets["availableCount"] = quota.resetCredits;
+        writeEpoch(resets, "expiresAt", codexCredit_.resetCreditsExpireAt);
+    }
     auto windows = out["windows"].to<JsonArray>();
     for (uint8_t i = 0; i < quota.count; ++i) {
         auto item = windows.add<JsonObject>();
         const auto& window = quota.windows[i];
         item["id"] = window.label;
-        writeEpoch(item, "windowMinutes", minutes_[provider][i]);
+        writeEpoch(item, "windowMinutes", window.windowMinutes);
         writeEpoch(item, "resetsAt", window.resetEpochSeconds);
         if (percentages_[provider][i] < 0) item["usedPercent"] = nullptr;
         else item["usedPercent"] = percentages_[provider][i];

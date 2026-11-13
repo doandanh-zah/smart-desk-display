@@ -5,6 +5,7 @@
 #include <freertos/queue.h>
 
 #include "desk/RemoteProtocol.h"
+#include "desk/RemotePoll.h"
 
 namespace desk {
 
@@ -33,7 +34,9 @@ private:
     bool askedIntegrations_ = false;
     uint32_t integrationsAt_ = 0;
     uint32_t nextAttempt_ = 0;
-    uint32_t retryMs_ = 20000;
+    uint32_t retryMs_ = remote::PollSchedule::idleMs;
+    uint32_t pollHintMs_ = remote::PollSchedule::idleMs;
+    remote::PollSchedule pollSchedule_;
     char token_[remote::tokenLength + 1] = {};
     struct Diagnostics {
         uint32_t freeBefore = 0;
