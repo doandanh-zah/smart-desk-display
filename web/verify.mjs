@@ -415,6 +415,49 @@ try {
     assert.deepEqual(await samples(), neutral);
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.waitForFunction((before) => [...document.querySelectorAll(".quota-mascot canvas")].every((el, index) => el.toDataURL() !== before[index]), neutral, { timeout: 4700, polling: 50 });
+    await page.route("**/api/integrations", async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      const now = Math.floor(Date.now() / 1000);
+      data.quotas.codex = {
+        state: "stale", observedAt: now - 1000,
+        credit: { balance: null, hasCredits: true, unlimited: false, unit: "credits" },
+        resetCredits: { availableCount: 1, expiresAt: now + 86400 },
+        windows: [
+          { id: "primary", windowMinutes: 300, usedPercent: 100, unit: null, resetsAt: now - 10 },
+          { id: "secondary", windowMinutes: 10080, usedPercent: 16, unit: null, resetsAt: now + 86400 },
+        ],
+      };
+      data.quotas.claude = {
+        state: "live", observedAt: now,
+        windows: [
+          { id: "five_hour", windowMinutes: 300, usedPercent: 0, unit: null, resetsAt: null },
+          { id: "seven_day", windowMinutes: 10080, usedPercent: null, unit: null, resetsAt: null },
+        ],
+      };
+      await route.fulfill({ response, json: data });
+    });
+    await button(page, "Làm mới").click();
+    await expectText(page, "#quota-codex-windows", "Còn 0%");
+    await expectText(page, "#quota-codex-windows", "Còn 84%");
+    await expectText(page, "#quota-codex-windows", /Có credit · chưa có số dư/);
+    await expectText(page, "#quota-codex-windows", /Lượt đặt lại được cấp · 1 · Hết hạn/);
+    await expectText(page, "#quota-claude-windows", "Còn 100%");
+    assert.equal(await page.locator("#quota-claude-windows meter").count(), 1);
+    await page.evaluate(() => {
+      const ctx = document.querySelector("#preview").getContext("2d");
+      const original = ctx.fillText.bind(ctx);
+      window.previewLabels = [];
+      ctx.fillText = (value, ...args) => {
+        window.previewLabels.push(value);
+        original(value, ...args);
+      };
+    });
+    await button(page, "Hiển thị Codex trên TFT").click();
+    await expectText(page, "#quota-feedback", "Đã chọn Quota Codex.");
+    const previewLabels = await page.evaluate(() => window.previewLabels);
+    for (const value of ["100%", "16%", "STALE", "CREDIT AVAILABLE"]) assert.ok(previewLabels.includes(value), value);
+    assert.ok(previewLabels.some((value) => /Updated .* ICT \/ R: 1$/.test(value)));
     await button(page, "Hiển thị Claude trên TFT").click();
     await expectText(page, "#quota-feedback", "Đã chọn Quota Claude.");
     assert.equal((await api(origin, "status")).mode, "claude");

@@ -354,8 +354,12 @@ window.createDeskPreview = function createDeskPreview(canvas) {
     const credit = provider === "codex" && ["LIVE", "STALE"].includes(state) ? data.credit : null;
     const balance = credit?.unit === "credits" && typeof credit.balance === "string" && /^\d+(?:\.\d+)?$/.test(credit.balance) && credit.balance.length <= 20;
     text(credit?.unlimited ? "CREDIT UNLIMITED" : balance ? `CREDIT ${credit.balance}` : credit?.hasCredits === true ? "CREDIT AVAILABLE" : credit?.hasCredits === false ? "CREDIT NONE" : "CREDIT N/A", 304, 213, 10, color.muted, "right");
-    if (data?.observedAt && ["LIVE", "STALE"].includes(state)) {
-      text(`Updated ${ictStamp(data.observedAt)} ICT`, 16, 226, 10, color.muted);
+    if (["LIVE", "STALE"].includes(state)) {
+      const details = [];
+      if (data.observedAt) details.push(`Updated ${ictStamp(data.observedAt)} ICT`);
+      const count = provider === "codex" ? data.resetCredits?.availableCount : null;
+      if (Number.isInteger(count) && count >= 0) details.push(`R: ${count}`);
+      if (details.length) text(details.join(" / "), 16, 226, 10, color.muted);
     }
   }
 
