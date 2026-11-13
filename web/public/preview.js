@@ -63,6 +63,7 @@ window.createDeskPreview = function createDeskPreview(canvas) {
   let previousMode;
   let petElapsed = 0;
   let previousPetFrame;
+  let walletQr;
   const petSprites = new Map();
 
   function box(x, y, width, height, fill) {
@@ -267,6 +268,30 @@ window.createDeskPreview = function createDeskPreview(canvas) {
     return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map(pad).join(":");
   }
 
+  function solanaWallet(address, qr) {
+    text("SOLANA WALLET", 10, 13, 19, color.text);
+    text("DEVNET", 308, 16, 10, color.warning, "right");
+    box(10, 40, 300, 1, color.line);
+    text("dsuc.sol", 184, 62, 19, color.accent);
+    text("PUBLIC KEY", 184, 102, 10, color.muted);
+    for (let start = 0; start < address.length; start += 11) {
+      text(address.slice(start, start + 11), 184, 123 + 23 * (start / 11), 19, color.text);
+    }
+    if (!walletQr) {
+      walletQr = new Image();
+      walletQr.addEventListener("load", () => {
+        if (previousMode === "solana") paintWalletQr();
+      });
+      walletQr.src = qr;
+    }
+    if (walletQr.naturalWidth) paintWalletQr();
+  }
+
+  function paintWalletQr() {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(walletQr, 8, 53, 172, 172);
+  }
+
   function countdown(data, deviceName) {
     const states = { idle: "READY", running: "RUNNING", paused: "PAUSED", completed: "COMPLETE", waiting_for_time: "WAITING FOR NTP" };
     frame("COUNTDOWN", deviceName, states[data?.state] || "NOT CONFIGURED");
@@ -366,6 +391,7 @@ window.createDeskPreview = function createDeskPreview(canvas) {
         else clock(frameData.localEpoch, frameData.showSeconds, frameData.deviceName, frameData.wifi);
         break;
       case "countdown": countdown(frameData.countdown, frameData.deviceName); break;
+      case "solana": solanaWallet(frameData.walletAddress, frameData.walletQr); break;
       case "pomodoro": pomodoro(frameData.timer, frameData.deviceName, frameData.wifi); break;
       case "message": message(frameData.message, frameData.deviceName, frameData.wifi); break;
       default: text("SMART DESK DISPLAY", 160, 114, 14, color.muted, "center");

@@ -15,9 +15,11 @@ const config = {
 };
 const timer = { phase: "focus", state: "idle", remainingSeconds: 1500, focusMinutes: 25, breakMinutes: 5 };
 const githubScenarios = new Set(["live", "stale", "error", "loading"]);
-const scenarios = new Set(["demo", ...githubScenarios, "unsynced", "reject", "offline", "modes-v2"]);
+const scenarios = new Set(["demo", ...githubScenarios, "unsynced", "reject", "offline", "modes-v2", "wallet"]);
 const scenario = process.env.FIXTURE_SCENARIO || "demo";
-const versionTwo = scenario === "modes-v2";
+const wallet = scenario === "wallet";
+const versionTwo = scenario === "modes-v2" || wallet;
+if (wallet) modes.push("solana");
 if (versionTwo) {
   modes.push("countdown");
   config.rotation.modes = ["github", "clock", "countdown"];
@@ -157,6 +159,7 @@ function status(now) {
     github: { state, lastSync, error },
     pomodoro: timer,
     ...(versionTwo ? { countdown: countdownSample(now) } : {}),
+    ...(wallet ? { solanaWallet: true } : {}),
   };
 }
 

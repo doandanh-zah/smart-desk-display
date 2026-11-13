@@ -13,7 +13,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
-MODES = {"github", "clock", "stats", "pomodoro", "message", "countdown"}
+MODES = {"github", "clock", "stats", "pomodoro", "message", "countdown", "solana"}
 LEGACY_FIXTURE_MODES = ("github", "clock", "stats", "pomodoro", "message")
 MAX_BODY = 1_000_000
 

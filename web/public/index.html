@@ -69,6 +69,7 @@
             <button class="mode-card" type="button" data-mode="github" aria-label="Đóng góp GitHub" aria-pressed="false" disabled><span class="mode-icon icon-grid" aria-hidden="true"></span><strong>GitHub</strong><span class="mode-state" aria-hidden="true"></span></button>
             <button class="mode-card" type="button" data-mode="clock" aria-pressed="false" disabled><span class="mode-icon icon-clock" aria-hidden="true"></span><strong>Đồng hồ + Lịch</strong><span class="mode-state" aria-hidden="true"></span></button>
             <button class="mode-card" type="button" data-mode="countdown" aria-pressed="false" disabled><span class="mode-icon icon-timer" aria-hidden="true"></span><strong>Đếm ngược</strong><span class="mode-state" aria-hidden="true"></span></button>
+            <button class="mode-card" type="button" data-mode="solana" aria-pressed="false" hidden disabled><span class="mode-icon icon-wallet" aria-hidden="true"></span><strong>Ví Solana</strong><span class="mode-state" aria-hidden="true"></span></button>
           </div>
           <p class="feedback mode-note" id="mode-feedback" role="status"></p>
         </div>
@@ -233,7 +234,7 @@
                 <select name="theme"><option value="dark">Tối</option><option value="light">Sáng</option></select>
               </label>
               <label class="field">Chế độ khi khởi động
-                <select name="startupMode"><option value="github">Đóng góp GitHub</option><option value="clock">Đồng hồ + Lịch</option><option data-current-mode value="countdown">Đếm ngược</option><option data-legacy-mode value="stats">Thống kê GitHub</option><option data-legacy-mode value="pomodoro">Pomodoro</option><option data-legacy-mode value="message">Tin nhắn</option></select>
+                <select name="startupMode"><option value="github">Đóng góp GitHub</option><option value="clock">Đồng hồ + Lịch</option><option data-current-mode value="countdown">Đếm ngược</option><option data-wallet-mode value="solana" hidden disabled>Ví Solana</option><option data-legacy-mode value="stats">Thống kê GitHub</option><option data-legacy-mode value="pomodoro">Pomodoro</option><option data-legacy-mode value="message">Tin nhắn</option></select>
               </label>
               <label class="check"><input name="clockShowSeconds" type="checkbox">Hiện giây trên đồng hồ</label>
             </div>
@@ -247,6 +248,7 @@
                 <label class="check"><input name="rotationMode" type="checkbox" value="github">Đóng góp GitHub</label>
                 <label class="check"><input name="rotationMode" type="checkbox" value="clock">Đồng hồ + Lịch</label>
                 <label class="check" data-current-mode><input name="rotationMode" type="checkbox" value="countdown">Đếm ngược</label>
+                <label class="check" data-wallet-mode hidden><input name="rotationMode" type="checkbox" value="solana" disabled>Ví Solana</label>
                 <label class="check" data-legacy-mode><input name="rotationMode" type="checkbox" value="stats">Thống kê GitHub</label>
                 <label class="check" data-legacy-mode><input name="rotationMode" type="checkbox" value="pomodoro">Pomodoro</label>
                 <label class="check" data-legacy-mode><input name="rotationMode" type="checkbox" value="message">Tin nhắn</label>

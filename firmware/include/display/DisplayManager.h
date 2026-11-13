@@ -5,7 +5,7 @@
 
 namespace desk::display {
 
-enum class Mode : uint8_t { GitHub, Clock, Stats, Pomodoro, Message, Countdown };
+enum class Mode : uint8_t { GitHub, Clock, Stats, Pomodoro, Message, Countdown, Solana };
 enum class Theme : uint8_t { Dark, Light };
 enum class Alignment : uint8_t { Left, Center, Right };
 enum class GitHubState : uint8_t { Demo, Loading, Live, Stale, Error };
@@ -118,6 +118,7 @@ class DisplayManager {
   void syncStatus(const GitHubData& data, int16_t statusY, int16_t detailY);
   void clock(const Frame& frame);
   void countdown(const CountdownData& data);
+  void solanaWallet();
   void pomodoro(const Frame& frame);
   void message(const Frame& frame);
   void networkStatus(const Frame& frame);

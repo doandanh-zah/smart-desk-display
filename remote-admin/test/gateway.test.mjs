@@ -117,8 +117,8 @@ async function login(ip) {
   return { origin, cookie: cookie.split(';')[0], 'x-csrf-token': auth.csrfToken };
 }
 
-function sync({ nonce = randomHex(16), ts = now, ack = null, headers = {}, wantIntegrations, pollHints } = {}) {
-  return app(request('/api/device/sync', { data: { v: 1, ts, nonce, ...payload, ack, wantIntegrations, pollHints },
+function sync({ nonce = randomHex(16), ts = now, ack = null, headers = {}, wantIntegrations, pollHints, snapshot = payload } = {}) {
+  return app(request('/api/device/sync', { data: { v: 1, ts, nonce, ...snapshot, ack, wantIntegrations, pollHints },
     headers: { authorization: 'Bearer ' + token, ...headers } }));
 }
 
@@ -213,7 +213,14 @@ test('device snapshot, scoped credentials, replay, allowlist, durable queue and 
   const lookup = await gateway()(request('/api/admin/commands/' + id, { headers: admin }));
   assert.equal((await lookup.json()).command.state, 'applied');
 
-  const next = { ...command, id: randomHex(16) };
+  const next = { ...command, id: randomHex(16), payload: { mode: 'solana' } };
+  const wallet = { ...payload, status: { ...payload.status, solanaWallet: true, mode: 'solana' },
+    config: { ...payload.config, startupMode: 'solana' } };
+  assert.equal((await sync({ snapshot: wallet })).status, 200);
+  const walletState = await (await state()).json();
+  assert.equal(walletState.status.solanaWallet, true);
+  assert.equal(walletState.status.mode, 'solana');
+  assert.equal(walletState.config.startupMode, 'solana');
   assert.equal((await create(next)).status, 202);
   now += 76;
   assert.equal((await (await state()).json()).connection, 'stale');

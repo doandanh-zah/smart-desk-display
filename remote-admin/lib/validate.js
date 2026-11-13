@@ -1,7 +1,7 @@
 export const ID = /^[a-f0-9]{32}$/;
 export const TOKEN = /^[a-f0-9]{64}$/;
 const CODE = /^[a-z0-9_]{1,48}$/;
-const CONTROL_MODES = ['github', 'clock', 'stats', 'pomodoro', 'message', 'countdown'];
+const CONTROL_MODES = ['github', 'clock', 'stats', 'pomodoro', 'message', 'countdown', 'solana'];
 const MODES = [...CONTROL_MODES, 'codex', 'claude'];
 const THEMES = ['dark', 'light'];
 const ALIGNMENTS = ['left', 'center', 'right'];
@@ -113,7 +113,8 @@ function deviceStatus(value) {
   return { deviceName: value.deviceName, mode: value.mode, uptimeSeconds: value.uptimeSeconds,
     firmwareVersion: value.firmwareVersion, wifi: { connected: value.wifi.connected, ip: null, hostname: null, provisioning: false },
     time: { synced: value.time.synced, epochSeconds: value.time.epochSeconds, timezone: 'Asia/Ho_Chi_Minh', utcOffsetMinutes: 420 },
-    github, pomodoro: timer, ...(counter ? { countdown: counter } : {}) };
+    github, pomodoro: timer, ...(counter ? { countdown: counter } : {}),
+    ...(value.solanaWallet === true ? { solanaWallet: true } : {}) };
 }
 
 function deviceConfig(value) {

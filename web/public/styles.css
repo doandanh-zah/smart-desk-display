@@ -71,6 +71,8 @@ main { padding-block: 20px 52px; }
 .mode-note { margin-top: 7px; }
 .mode-icon { display: grid; place-items: center; width: 21px; height: 20px; color: currentColor; }
 .mode-icon::before, .mode-icon::after { content: ""; grid-area: 1 / 1; }
+.icon-wallet::before { width: 16px; height: 12px; border: 1px solid currentColor; border-radius: 2px; }
+.icon-wallet::after { width: 6px; height: 5px; inset: 8px 2px auto auto; border: 1px solid currentColor; border-radius: 2px; background: var(--inset); }
 .icon-grid::before { width: 3px; height: 3px; background: currentColor; box-shadow: -5px -5px, 0 -5px, 5px -5px, -5px 0, 5px 0, -5px 5px, 0 5px, 5px 5px; }
 .icon-clock::before, .icon-timer::before { width: 16px; height: 16px; border: 1px solid; border-radius: 50%; }
 .icon-clock::after, .icon-timer::after { width: 5px; height: 6px; border-left: 1px solid; border-bottom: 1px solid; transform: translate(2px, -2px); }
@@ -392,3 +394,7 @@ dialog .actions { justify-content: flex-end; }
 .wallet-copy { justify-self: stretch; }
 #wallet-feedback:empty { display: none; }
 .wallet-network { text-align: center; }
+
+@media (max-width: 699px) {
+  .mode-list:has([data-mode="solana"]:not([hidden])) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

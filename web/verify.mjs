@@ -269,6 +269,26 @@ try {
     console.log("PASS Solana wallet navigation, QR and clipboard");
   });
 
+  await withFixture("wallet", async (page, origin) => {
+    const wallet = mode(page, "Ví Solana");
+    await wallet.click();
+    await expectText(page, "#active-mode", "Ví Solana");
+    await expectText(page, "#preview-description", /dsuc.sol · Solana Devnet/);
+    await page.waitForFunction(() => {
+      const ctx = document.querySelector("#preview").getContext("2d");
+      const white = ctx.getImageData(8, 53, 1, 1).data;
+      const black = ctx.getImageData(28, 73, 1, 1).data;
+      return white[0] === 255 && white[1] === 255 && black[0] === 0 && black[1] === 0;
+    });
+    const modeState = await api(origin, "status");
+    assert.equal(modeState.mode, "solana");
+    assert.equal((await api(origin, "config")).startupMode, "solana");
+    await mode(page, "Đồng hồ").click();
+    await expectText(page, "#active-mode", "Đồng hồ + Lịch");
+    assert.equal(await wallet.getAttribute("aria-pressed"), "false");
+    console.log("PASS selecting and leaving the TFT Solana wallet mode");
+  });
+
   await withFixture("unsynced", async (page) => {
     await mode(page, "Đồng hồ").click();
     await expectText(page, "#preview-description", /chờ đồng bộ NTP/);
@@ -444,7 +464,7 @@ try {
     await page.goto(origin + "/#quota");
     await expectText(page, "#active-mode", "Đếm ngược");
     assert.equal(new URL(page.url()).hash, "");
-    assert.equal(await page.locator('#mode-list button').count(), 3);
+    assert.equal(await page.locator('#mode-list button:visible').count(), 3);
     assert.equal(await page.getByRole("link", { name: "Quota", exact: true }).count(), 0);
     await page.getByRole("link", { name: "Cài đặt" }).click();
     assert.deepEqual(await page.getByLabel("Chế độ khi khởi động").evaluate((el) =>

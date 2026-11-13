@@ -5,6 +5,7 @@
 
 #include "display/MessageLayout.h"
 #include "GitHubPet.h"
+#include "SolanaWallet.h"
 
 namespace desk::display {
 namespace {
@@ -35,7 +36,8 @@ const char* orEmpty(const char* text) {
 const char* label(Mode mode) {
   switch (mode) {
     case Mode::Countdown: return "COUNTDOWN";
-    case Mode::GitHub: break;
+    case Mode::GitHub:
+    case Mode::Solana: break;
     case Mode::Clock: return "CLOCK + CALENDAR";
     case Mode::Stats: return "DEVELOPER STATS";
     case Mode::Pomodoro: return "POMODORO";
@@ -181,6 +183,10 @@ void DisplayManager::splash(const Frame& frame) {
 }
 
 void DisplayManager::setup(const Frame& frame) {
+  if (frame.mode == Mode::Solana) {
+    if (fresh_) solanaWallet();
+    return;
+  }
   if (fresh_) {
     tft_.drawFastHLine(Left, 54, BodyWidth, palette_->border);
     drawText("WI-FI SETUP", 11, Left, 18, BodyWidth, 2, palette_->accent, Alignment::Left);
@@ -236,13 +242,55 @@ void DisplayManager::content(const Frame& frame) {
   field(subtitle_, subtitle, Left, 34, BodyWidth, 1, palette_->muted);
 
   switch (frame.mode) {
-    case Mode::GitHub: break;
+    case Mode::GitHub:
+    case Mode::Solana: break;
     case Mode::Countdown: countdown(frame.countdown); break;
     case Mode::Stats: stats(frame.github); break;
     case Mode::Clock: clock(frame); break;
     case Mode::Pomodoro: pomodoro(frame); break;
     case Mode::Message: message(frame); break;
   }
+}
+
+void DisplayManager::solanaWallet() {
+  constexpr int16_t QrX = 8;
+  constexpr int16_t QrY = 53;
+  constexpr int16_t Scale = 4;
+  constexpr int16_t QrWidth = solana::QrSize * Scale;
+  constexpr int16_t AddressX = 184;
+  constexpr int16_t AddressWidth = 132;
+  constexpr uint8_t CharactersPerLine = 11;
+
+  drawText("SOLANA WALLET", 13, 10, 13, 180, 2, palette_->text, Alignment::Left);
+  drawText("DEVNET", 6, 204, 16, 104, 1, palette_->warning, Alignment::Right);
+  tft_.drawFastHLine(10, 40, 300, palette_->border);
+  drawText("dsuc.sol", 8, AddressX, 62, AddressWidth, 2, palette_->accent, Alignment::Left);
+  drawText("PUBLIC KEY", 10, AddressX, 102, AddressWidth, 1, palette_->muted, Alignment::Left);
+  constexpr uint8_t length = sizeof(solana::Address) - 1;
+  for (uint8_t offset = 0; offset < length; offset += CharactersPerLine) {
+    const uint8_t remaining = length - offset;
+    const uint8_t count = remaining < CharactersPerLine ? remaining : CharactersPerLine;
+    drawText(solana::Address + offset, count, AddressX, 123 + 23 * (offset / CharactersPerLine),
+             AddressWidth, 2, palette_->text, Alignment::Left);
+  }
+
+  tft_.startWrite();
+  tft_.writeFillRect(QrX, QrY, QrWidth, QrWidth, ILI9341_WHITE);
+  for (int row = 0; row < solana::QrSize; ++row) {
+    const uint64_t bits = solana::QrRows[row];
+    int column = 0;
+    while (column < solana::QrSize) {
+      if (!(bits & (1ULL << column))) {
+        ++column;
+        continue;
+      }
+      const int start = column++;
+      while (column < solana::QrSize && (bits & (1ULL << column))) ++column;
+      tft_.writeFillRect(QrX + start * Scale, QrY + row * Scale,
+                         (column - start) * Scale, Scale, ILI9341_BLACK);
+    }
+  }
+  tft_.endWrite();
 }
 
 void DisplayManager::github(const Frame& frame) {

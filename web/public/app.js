@@ -3,7 +3,7 @@
 const byId = (id) => document.getElementById(id);
 const modeNames = {
   github: "Đóng góp GitHub", clock: "Đồng hồ + Lịch", countdown: "Đếm ngược", stats: "Thống kê GitHub",
-  pomodoro: "Pomodoro", message: "Tin nhắn",
+  pomodoro: "Pomodoro", message: "Tin nhắn", solana: "Ví Solana",
 };
 const githubNames = {
   demo: "Dữ liệu mẫu", loading: "Đang đồng bộ", live: "Dữ liệu GitHub",
@@ -205,6 +205,10 @@ function renderPreview(timer) {
   } else if (mode === "countdown") {
     frame.countdown = currentCountdown();
     caption = frame.countdown ? `${countdownStates[frame.countdown.state]} · ${countdownTime(frame.countdown.remainingSeconds)}` : "Chưa có trạng thái đếm ngược";
+  } else if (mode === "solana") {
+    frame.walletAddress = byId("wallet-address").value;
+    frame.walletQr = document.querySelector(".wallet-qr").src;
+    caption = "dsuc.sol · Solana Devnet";
   } else if (mode === "pomodoro" && timer) {
     frame.timer = timer;
     caption = `${timer.phase === "break" ? "Nghỉ ngắn" : "Tập trung"} · ${timerNames[timer.state]} · ${clockText(timer.remainingSeconds)}`;
@@ -530,7 +534,8 @@ function renderControls() {
   const ready = online && !!status;
   const working = busy || remoteCommand?.state === "queued";
   modes.forEach((button) => {
-    const unavailable = !ready || (button.dataset.mode === "countdown" && !status?.countdown);
+    if (button.dataset.mode === "solana") button.hidden = !status?.solanaWallet;
+    const unavailable = !ready || button.hidden || (button.dataset.mode === "countdown" && !status?.countdown);
     button.disabled = unavailable;
     button.setAttribute("aria-disabled", String(unavailable || working));
     const active = status?.mode === button.dataset.mode;
@@ -618,12 +623,14 @@ function fillConfig(next) {
   const startup = settingsForm.elements.startupMode;
   [...startup.options].forEach((option) => {
     option.hidden = option.hasAttribute("data-current-mode") && !currentModes ||
+      option.hasAttribute("data-wallet-mode") && !status?.solanaWallet ||
       option.hasAttribute("data-legacy-mode") && currentModes && option.value !== next.startupMode;
     option.disabled = option.hidden;
   });
   rotationModes.forEach((box) => {
     const item = box.closest("label");
     item.hidden = item.hasAttribute("data-current-mode") && !currentModes ||
+      item.hasAttribute("data-wallet-mode") && !status?.solanaWallet ||
       item.hasAttribute("data-legacy-mode") && currentModes && !next.rotation.modes.includes(box.value);
     box.disabled = item.hidden;
   });

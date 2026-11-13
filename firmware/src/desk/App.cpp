@@ -5,7 +5,7 @@
 
 namespace desk {
 namespace {
-constexpr char version[] = "1.2.4";
+constexpr char version[] = "1.2.5";
 constexpr char setupAddress[] = "192.168.4.1";
 constexpr time_t validEpoch = 1704067200;
 
@@ -228,6 +228,7 @@ void App::status(JsonObject out) const {
     wifi["provisioning"] = wifi_.setupActive();
     out["uptimeSeconds"] = static_cast<uint64_t>(esp_timer_get_time() / 1000000);
     out["firmwareVersion"] = version;
+    out["solanaWallet"] = true;
     JsonObject time = out["time"].to<JsonObject>();
     time["synced"] = epoch_ > 0;
     if (epoch_ > 0) time["epochSeconds"] = epoch_;

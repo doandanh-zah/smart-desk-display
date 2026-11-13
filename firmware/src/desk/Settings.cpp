@@ -2,7 +2,7 @@
 
 namespace desk {
 namespace {
-constexpr const char* modes[] = {"github", "clock", "stats", "pomodoro", "message", "countdown"};
+constexpr const char* modes[] = {"github", "clock", "stats", "pomodoro", "message", "countdown", "solana"};
 constexpr const char* alignments[] = {"left", "center", "right"};
 constexpr const char* settingsKey = "config-v2";
 constexpr const char* legacySettingsKey = "config-v1";
