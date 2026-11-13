@@ -5,7 +5,7 @@
 
 namespace desk {
 namespace {
-constexpr char version[] = "1.2.2";
+constexpr char version[] = "1.2.3";
 constexpr char setupAddress[] = "192.168.4.1";
 constexpr time_t validEpoch = 1704067200;
 

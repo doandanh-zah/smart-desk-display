@@ -275,13 +275,13 @@ window.createDeskPreview = function createDeskPreview(canvas) {
 
   function clockCalendar(epoch, showSeconds, deviceName, calendar) {
     const date = epoch == null ? null : new Date(epoch * 1000);
-    const status = sourceStatus(calendar);
-    frame("CLOCK + CALENDAR", deviceName, `${date ? "ICT" : "NTP PENDING"}  /  CALENDAR ${status}`);
-    if (["live", "stale"].includes(calendar.state)) {
-      const event = calendar.events?.[0];
-      const detail = event ? `${event.allDay ? "ALL DAY" : ictStamp(event.start)}  ${event.title.slice(0, 32)}` : "No upcoming events";
-      text(detail, 16, 230, 9, color.muted);
-    }
+    const hasCalendar = ["live", "stale"].includes(calendar.state);
+    const event = hasCalendar ? calendar.events?.[0] : undefined;
+    const start = event ? (event.allDay ? "ALL DAY" : ictStamp(event.start)) : (date ? "ICT" : "NTP PENDING");
+    const title = event ? (event.title || "Calendar event") : (hasCalendar ? "No upcoming events" : sourceStatus(calendar));
+    frame("CLOCK + CALENDAR", deviceName, "");
+    text(start, 16, 220, 9, color.muted);
+    text(Array.from(title).slice(0, 34).join(""), 304, 220, 9, color.text, "right");
     roundedBox(151, 68, 153, 126, 4, color.surface);
     text(date ? `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}` : "--:--", 16, 91, 36, color.text);
     if (!date) {

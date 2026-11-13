@@ -141,22 +141,20 @@ void DisplayManager::clock(const Frame& frame) {
 
   const CalendarData* calendar = frame.calendar;
   const SourceState state = calendar ? calendar->state : SourceState::NotConnected;
-  char status[49];
-  std::snprintf(status, sizeof(status), "%s  /  CALENDAR %s",
-                data.synced ? "ICT" : "NTP PENDING", sourceLabel(state));
-  field(footer_, status, Left, 219, BodyWidth, 1, palette_->muted);
-  char event[49] = "";
-  if (calendar && hasSnapshot(state)) {
-    if (calendar->count) {
-      const CalendarEvent& next = calendar->events[0];
-      char start[16] = "ALL DAY";
-      if (!next.allDay) formatIct(start, sizeof(start), next.startEpochSeconds, "%m-%d %H:%M");
-      std::snprintf(event, sizeof(event), "%s  %.32s", start, next.title[0] ? next.title : "Calendar event");
-    } else {
-      std::snprintf(event, sizeof(event), "No upcoming events");
-    }
+  const CalendarEvent* next = calendar && hasSnapshot(state) && calendar->count ? &calendar->events[0] : nullptr;
+  char start[16];
+  std::snprintf(start, sizeof(start), "%s", data.synced ? "ICT" : "NTP PENDING");
+  const char* title = hasSnapshot(state) ? "No upcoming events" : sourceLabel(state);
+  if (next) {
+    if (next->allDay) std::snprintf(start, sizeof(start), "ALL DAY");
+    else formatIct(start, sizeof(start), next->startEpochSeconds, "%m-%d %H:%M");
+    title = next->title[0] ? next->title : "Calendar event";
   }
-  field(detail_, event, Left, 230, BodyWidth, 1, palette_->muted);
+  constexpr int16_t footerY = 220;
+  constexpr int16_t titleOffset = 84;
+  field(footer_, start, Left, footerY, 72, 1, palette_->muted);
+  field(detail_, title, Left + titleOffset, footerY, BodyWidth - titleOffset, 1,
+        palette_->text, Alignment::Right);
 }
 
 void DisplayManager::countdown(const CountdownData& data) {
