@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Read the v2 Smart Desk mode and integration API from a LAN or fixture origin."""
+"""Verify the Smart Desk Countdown and Calendar APIs and retired quota routes."""
 
 import argparse
-import re
 import sys
 from urllib.parse import urlsplit
 
@@ -10,8 +9,6 @@ from check_http import CheckFailed, check_public_fields, has_fields, read_json, 
 
 COUNTDOWN_FIELDS = ("kind", "state", "durationSeconds", "targetEpochSeconds", "remainingSeconds")
 STATES = {"unavailable", "unsupported", "live", "stale"}
-QUOTA_SOURCES = {"codex": ("codex_app_server", {"primary", "secondary"}),
-                 "claude": ("claude_code_statusline", {"five_hour", "seven_day"})}
 
 
 def integer(value, minimum, maximum):
@@ -71,46 +68,6 @@ def check_calendar(value):
         require(type(entry["allDay"]) is bool, "calendar event: invalid allDay")
 
 
-def check_quota(value, provider):
-    entries = check_source(value, "windows", 2)
-    source, ids = QUOTA_SOURCES[provider]
-    require(value.get("source") == source and value.get("kind") == "subscription",
-            f"{provider}: incorrect source or kind")
-    credit = value.get("credit")
-    reset_credits = value.get("resetCredits")
-    if credit is not None:
-        has_fields(credit, ("balance", "unit", "hasCredits", "unlimited", "resetsAt"), "credit")
-        require(provider == "codex" and credit["unit"] == "credits", "credit: invalid provider or unit")
-        require(type(credit["hasCredits"]) is bool and type(credit["unlimited"]) is bool, "credit: invalid flags")
-        balance = credit["balance"]
-        require(balance is None or (isinstance(balance, str) and
-                re.fullmatch(r"[0-9]{1,18}(?:\.[0-9]{1,8})?", balance)), "credit: invalid balance")
-        require(credit["resetsAt"] is None or utc_epoch(credit["resetsAt"]), "credit: invalid reset time")
-    if reset_credits is not None:
-        has_fields(reset_credits, ("availableCount", "expiresAt"), "reset credits")
-        require(provider == "codex" and integer(reset_credits["availableCount"], 0, 65535),
-                "reset credits: invalid provider or count")
-        require(reset_credits["expiresAt"] is None or utc_epoch(reset_credits["expiresAt"]),
-                "reset credits: invalid expiration")
-    if value["state"] in ("unavailable", "unsupported"):
-        require(credit is None and reset_credits is None, "unavailable quota: unexpected credits")
-    seen = set()
-    for entry in entries:
-        fields = {"id", "windowMinutes", "resetsAt", "usedPercent", "used", "limit", "unit"}
-        has_fields(entry, fields, "quota window")
-        require(set(entry) == fields, "quota window contains unexpected fields")
-        require(entry["id"] in ids - seen, f"{provider}: invalid or duplicate quota window ID")
-        seen.add(entry["id"])
-        require(entry["windowMinutes"] is None or integer(entry["windowMinutes"], 1, 525600),
-                "quota window: invalid duration")
-        percent = entry["usedPercent"]
-        require(percent is None or (type(percent) in (int, float) and 0 <= percent <= 100),
-                "quota window: invalid percent")
-        require(entry["resetsAt"] is None or utc_epoch(entry["resetsAt"]), "quota window: invalid reset time")
-        require(all(entry[key] is None for key in ("used", "limit", "unit")),
-                "quota window: unexpected absolute usage")
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("origin")
@@ -132,15 +89,16 @@ def main():
     print("PASS status and countdown schema")
     integrations = get("integrations")
     require(integrations.get("v") == 1, "integrations: expected version 1")
-    has_fields(integrations, ("calendar", "quotas"), "integrations")
-    has_fields(integrations["quotas"], QUOTA_SOURCES, "integrations quotas")
+    has_fields(integrations, ("calendar",), "integrations")
+    require("quotas" not in integrations, "integrations: retired quotas projection is present")
     check_calendar(integrations["calendar"])
     check_calendar(get("calendar"))
     print("PASS calendar schema and filtered event fields")
     for provider in ("codex", "claude"):
-        check_quota(integrations["quotas"][provider], provider)
-        check_quota(get("quota/" + provider), provider)
-        print(f"PASS {provider} quota schema and distinct provider ID")
+        removed = read_json(raw + "/api/quota/" + provider, expected_status=404, no_store=True)
+        require(removed.get("ok") is False, f"{provider}: expected error for retired route")
+    print("PASS retired quota routes return 404")
+
 
 
 if __name__ == "__main__":

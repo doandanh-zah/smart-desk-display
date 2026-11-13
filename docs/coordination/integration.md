@@ -196,3 +196,15 @@ Chờ boot bản firmware đã sửa từ [handoff phần cứng](hardware.md) �
 - Cloud sau nạp: lệnh đầu trong lượt đo 9,267 s. Trong lease, 10 lệnh Clock ↔ GitHub có ACK đúng ID và khớp trạng thái LAN, p50 7,010 s, p95 9,231 s theo API kiểm thử đọc mỗi 1,8 s. POST nhận 202 trong khoảng 370–583 ms. So baseline 24,684/26,749 s, giảm khoảng 72%/65%, còn cao hơn mục tiêu 5/9 s. Không có ACK thiếu, khôi phục Clock và toàn bộ config, thu hồi phiên kiểm thử. Lệnh đầu của lượt này chưa đủ bằng chứng lease đã hết trước đó.
 - Codex live: nguồn Mac publish và LAN ESP32 khớp mẫu, hai cửa sổ 300/10.080 phút, hai mốc reset, credit và lượt reset. Một lần đọc trong lúc USB diagnostics khởi động lại thấy chưa có mẫu, lần sau cache đã phục hồi. Calendar và Claude vẫn unavailable tại lần đọc. Google OAuth route đã bật và chờ consent; chưa kiểm sự kiện thật hoặc màu trên panel.
 - Sau khi kết thúc lượt đo, Vercel vẫn thấy heartbeat khoảng 4,9 s/lượt đến 16:31:34 ICT, phù hợp khi lease còn hiệu lực hoặc tab khác đang mở. Không kết luận đã đo được lệnh cold sau idle 60 s và không ngắt phiên dashboard của chủ tài khoản. 9,267 s chỉ là lệnh đầu quan sát được trong lượt đo.
+
+## Đối chiếu phục hồi quota · ESP32 1.2.3
+
+- LAN đã chuyển sang `192.168.34.38`. HTTP, schema v2 và auth guard Production đạt. Calendar vẫn live, hai timer idle tại lần kiểm. Toàn bộ QA trên LAN dùng GET, không đổi mode/cấu hình. Chỉ xác nhận auth guard trên HTTPS, không đọc projection trong phiên admin cloud.
+- Baseline Codex stale, mẫu 16:27:53 ICT. Sau phục hồi, ESP32 và dashboard LAN dùng cùng mẫu Codex live 18:16:37 ICT. Chromium 390 px đối chiếu 300/10.080 phút, `usedPercent` nguồn và `100-usedPercent` trên web, reset ICT và mốc mẫu. TFT/preview theo code dùng tỷ lệ đã dùng. Mẫu có credit, số dư null và một lượt reset. Không suy diễn null thành 0. Log `.dev/logs/integration-quota-recovery-lan.log`.
+- Claude vẫn unavailable, thời điểm mẫu, balance và lượt reset null, hai cửa sổ web hiện thiếu tỷ lệ. 05 xác nhận Claude Code cần người dùng đăng nhập trong phiên riêng và gửi một tin nhắn để status line sinh mẫu thật. Chưa xác nhận TFT trực quan hoặc mẫu Claude.
+- Mốc 18:16:37 ICT khớp `codex-last-run.json` của tác vụ 5 phút do 05 cài. Đã xác nhận lần publish đầu của tác vụ và mẫu đến LAN. Việc lặp lại sau 5 phút phụ thuộc phiên macOS và SSD, theo handoff backend.
+
+## Gỡ quota Codex và Claude
+
+- Dừng phục hồi/đăng nhập quota theo yêu cầu mới. Baseline ESP32 tại `192.168.34.38`, firmware 1.2.3, đang chiếu Codex và startup cũng Codex. Rotation tắt với GitHub, Clock, Countdown, hai timer idle. Calendar có một sự kiện cache tại lúc chụp baseline. Snapshot riêng ở `.dev/integration/remove-quota/before.json`.
+- Kiểm tra phát hành cập nhật để chỉ nhận Calendar + Countdown và bắt lỗi nếu ESP32 còn projection quota hoặc hai route quota còn hoạt động. Fixture kiểm cả kết quả đạt và lỗi nếu có khóa `quotas`. Sau nạp, đối chiếu Codex startup về GitHub, giữ cấu hình còn lại và kiểm Calendar live. Luân phiên có cả quota trong fixture của firmware.

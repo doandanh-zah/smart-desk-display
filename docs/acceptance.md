@@ -154,16 +154,16 @@ Dùng `.dev/references/github-dark-heatmap.png` để đối chiếu dải màu 
 | Dữ liệu 24/52 tuần | TFT và preview dùng 24 tuần cuối theo contract; lịch web giữ 52×7, 364 ô. Kiểm tra tuần cũ bên trái, Chủ nhật hàng trên, level trùng vị trí ở đoạn 24 tuần và tổng dùng 52 tuần. GitHub live giữ `doandanh-zah`. |
 | Đồng hồ và lịch | Khi NTP chưa có giờ hợp lệ, có trạng thái chờ. Sau đồng bộ, ngày và giờ ICT đúng, gồm giao ngày/tháng. Thử mất Wi-Fi sau khi đã đồng bộ và phân biệt thời gian vẫn chạy với lần cập nhật NTP mới. Đối chiếu thiết bị và browser, ghi rõ fixture hay mất mạng thật. |
 | Countdown | Kiểm start/pause/resume/reset theo contract. Đóng toàn bộ browser ít nhất 10 giây khi đang đếm, sau đó so giây trên API với thời gian đã trôi và xem dashboard đọc lại trạng thái. Giữ phiên Pomodoro/countdown của người dùng. |
-| Quota hai provider | Dùng fixture riêng cho từng provider. Đối chiếu tên nguồn, giá trị, đơn vị, mốc reset và timezone, lần đồng bộ; trạng thái chưa cấu hình, stale/cache, upstream/rate limit và giá trị thiếu. Làm hỏng riêng một provider để kiểm provider kia giữ đúng trạng thái. Chỉ ghi đạt live khi có nguồn thật và đã đối chiếu. |
-| Mascot | So pose, nhịp và màu theo contract của từng mode/provider. Kiểm tra chuyển mode dùng đúng mascot, trạng thái dữ liệu không làm hiển thị nhầm. Quan sát TFT trực tiếp ít nhất một chu kỳ nếu có chuyển động. |
+| Gỡ quota | Kiểm tra bộ chọn chế độ, cấu hình khởi động và luân phiên, preview và TFT. URL cũ `#quota` về dashboard. API quota cũ trả 404, projection chỉ còn Calendar. Dùng fixture cấu hình cũ có quota trong khởi động và luân phiên, rồi kiểm trên ESP32 sau nạp. |
+| Mascot | So pose, nhịp và màu của ZAH NFT theo contract GitHub. Kiểm tra chuyển chế độ giữ vùng ngoài sprite ổn định. Quan sát TFT trực tiếp ít nhất một chu kỳ nếu có chuyển động. |
 | Migration | Nạp đè từ bản hiện có hoặc seed fixture cấu hình phiên bản cũ. Kiểm mode startup cũ, danh sách rotation, mode đã đổi tên/xóa, thứ tự và interval theo quy tắc firmware. So Wi-Fi, GitHub, message và config còn giữ. Sau reboot, chọn mode hợp lệ, không kẹt. |
-| LAN khi không có cloud/Internet | Dashboard và chức năng local truy cập được qua IP. Kiểm mode, countdown, đồng hồ/lịch và trạng thái quota/GitHub khi Internet vắng. Khi ngắt Wi-Fi thì quan sát TFT và truy cập lại LAN sau reconnect. Ghi rõ giới hạn nếu mô phỏng thay vì ngắt đường thật. |
+| LAN khi không có cloud/Internet | Dashboard và chức năng local truy cập được qua IP. Kiểm mode, countdown, đồng hồ/lịch và trạng thái Calendar/GitHub khi Internet vắng. Khi ngắt Wi-Fi thì quan sát TFT và truy cập lại LAN sau reconnect. Ghi rõ giới hạn nếu mô phỏng thay vì ngắt đường thật. |
 
 Khi 01 bàn giao bản nạp, chạy kiểm tra chỉ đọc, đối chiếu asset và kết quả NVS. Kiểm tra qua API trước khi thay đổi mode hoặc bộ đếm và chỉ thử khi có thể khôi phục.
 
 ```sh
-python3 verification/check_http.py device http://192.168.88.192
-python3 verification/check_modes.py http://192.168.88.192
+python3 verification/check_http.py device http://192.168.34.38
+python3 verification/check_modes.py http://192.168.34.38
 ```
 
 Ghi kết quả fixture, production và TFT theo môi trường thực tế. Nghiệm thu cloud admin tiếp tục sau khi gateway mở khóa và thiết bị ghép thành công.
