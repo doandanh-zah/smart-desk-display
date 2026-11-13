@@ -2,6 +2,7 @@
 """Read the v2 Smart Desk mode and integration API from a LAN or fixture origin."""
 
 import argparse
+import re
 import sys
 from urllib.parse import urlsplit
 
@@ -75,6 +76,24 @@ def check_quota(value, provider):
     source, ids = QUOTA_SOURCES[provider]
     require(value.get("source") == source and value.get("kind") == "subscription",
             f"{provider}: incorrect source or kind")
+    credit = value.get("credit")
+    reset_credits = value.get("resetCredits")
+    if credit is not None:
+        has_fields(credit, ("balance", "unit", "hasCredits", "unlimited", "resetsAt"), "credit")
+        require(provider == "codex" and credit["unit"] == "credits", "credit: invalid provider or unit")
+        require(type(credit["hasCredits"]) is bool and type(credit["unlimited"]) is bool, "credit: invalid flags")
+        balance = credit["balance"]
+        require(balance is None or (isinstance(balance, str) and
+                re.fullmatch(r"[0-9]{1,18}(?:\.[0-9]{1,8})?", balance)), "credit: invalid balance")
+        require(credit["resetsAt"] is None or utc_epoch(credit["resetsAt"]), "credit: invalid reset time")
+    if reset_credits is not None:
+        has_fields(reset_credits, ("availableCount", "expiresAt"), "reset credits")
+        require(provider == "codex" and integer(reset_credits["availableCount"], 0, 65535),
+                "reset credits: invalid provider or count")
+        require(reset_credits["expiresAt"] is None or utc_epoch(reset_credits["expiresAt"]),
+                "reset credits: invalid expiration")
+    if value["state"] in ("unavailable", "unsupported"):
+        require(credit is None and reset_credits is None, "unavailable quota: unexpected credits")
     seen = set()
     for entry in entries:
         fields = {"id", "windowMinutes", "resetsAt", "usedPercent", "used", "limit", "unit"}
