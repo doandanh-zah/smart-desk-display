@@ -18,9 +18,9 @@ struct Settings {
     bool clockShowSeconds = true;
     bool rotationEnabled = false;
     uint16_t rotationSeconds = 60;
-    uint8_t rotationCount = 5;
+    uint8_t rotationCount = 3;
     display::Mode rotationModes[5] = {display::Mode::GitHub, display::Mode::Clock,
-        display::Mode::Countdown, display::Mode::Codex, display::Mode::Claude};
+        display::Mode::Countdown};
     String text = "Hello, developer!";
     display::Alignment alignment = display::Alignment::Center;
     uint32_t color = 0x39D353;

@@ -166,3 +166,19 @@ shasum -a 256 "$SMART_DESK_DEV"/firmware-latency-quota/esp32doit-devkit-v1/{firm
 | `firmware.bin` | `7b91fb362c242762b997d8dc07777279504189f8fbe08b2b8e0530cb27ba8811` |
 | `bootloader.bin` | `3d234a7471f67b013686dabd4dee7c1fa915c9928463616a94bc9297acf1abf8` |
 | `partitions.bin` | `6a88d59601a83a16a19a08114b59d338324b8dec267d8b43e5d61ad56ec92102` |
+
+## Bàn giao firmware 1.2.4 · gỡ mode quota
+
+- Firmware còn GitHub, Đồng hồ + Lịch và Đếm ngược trong bộ chọn chính. API cũ cho Stats, Pomodoro và Message vẫn được giữ. API trả 404 cho hai route quota, từ chối chọn mode hoặc thêm quota vào rotation. `/api/calendar` giữ schema, `/api/integrations` chỉ có `v` và `calendar`.
+- Khi tải `config-v2`, startup Codex/Claude về GitHub. Rotation bỏ hai mode đó và giữ thứ tự còn lại. Nếu rỗng, dùng GitHub. Nếu còn dưới hai mode, tắt rotation. Lưu lại config đã chuẩn hóa. Giữ Wi-Fi, pairing, thiết lập GitHub, theme, đồng hồ, cấu hình countdown và tin nhắn. Đường import `config-v1` vẫn hoạt động.
+- ESP32 đọc Calendar từ cả projection cũ và mới. ESP32 chỉ giữ phần Calendar trong cache. Cloud tiếp tục nhận snapshot từ board cũ trong lúc chuyển phiên bản và từ chối lệnh quota mới. Xem [modes-contract.md](modes-contract.md).
+
+Build trên SSD đạt cùng renderer đã gỡ quota. RAM tĩnh 53.772/327.680 byte (16,4%), flash 1.166.253/2.097.152 byte (55,6%). Fixture C++ UBSan đạt cho migration v2 với rotation còn 0, 1 và 3 mode, giữ dữ liệu NVS, mode legacy, Calendar cũ/mới và thời hạn cache. Validator backend hiện tại nhận cả snapshot cũ và mới, từ chối lệnh display/rotation quota. Log `.dev/logs/firmware-calendar-only-{host,final}.log`.
+
+```sh
+cd /Volumes/SmartDeskDev/smart-desk-display
+source .dev/env.sh
+PLATFORMIO_BUILD_DIR="$SMART_DESK_DEV/firmware-calendar-only" pio run -d firmware -j 3
+```
+
+SHA-256 `firmware.bin` của build trên: `28c80a67eddc67fe89dfc3d965c5a7c90075a7ecd227e86c7077f31fbb5e3bc6`. 06 build lại firmware và LittleFS từ SHA tích hợp cuối. 01 giữ NVS khi nạp, rồi xác nhận migration, pairing/cloud heartbeat, GitHub live, Calendar và Countdown trên board. Phiên firmware chưa flash.

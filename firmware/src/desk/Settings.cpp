@@ -2,7 +2,7 @@
 
 namespace desk {
 namespace {
-constexpr const char* modes[] = {"github", "clock", "stats", "pomodoro", "message", "countdown", "codex", "claude"};
+constexpr const char* modes[] = {"github", "clock", "stats", "pomodoro", "message", "countdown"};
 constexpr const char* alignments[] = {"left", "center", "right"};
 constexpr const char* settingsKey = "config-v2";
 constexpr const char* legacySettingsKey = "config-v1";
@@ -65,7 +65,7 @@ bool hexColor(const String& value, uint32_t& color) {
     return true;
 }
 
-void migrateModes(Settings& settings) {
+void migrateV1Modes(Settings& settings) {
     const auto current = [](display::Mode mode) {
         if (mode == display::Mode::Pomodoro) return display::Mode::Countdown;
         if (mode == display::Mode::Stats || mode == display::Mode::Message) return display::Mode::GitHub;
@@ -85,6 +85,30 @@ void migrateModes(Settings& settings) {
     if (!count) settings.rotationModes[count++] = display::Mode::GitHub;
     settings.rotationCount = count;
     if (count < 2) settings.rotationEnabled = false;
+}
+
+bool removedQuotaMode(JsonVariantConst value) {
+    const auto name = value.as<JsonString>();
+    return name == "codex" || name == "claude";
+}
+
+bool removeStoredQuotaModes(JsonObject saved) {
+    bool changed = removedQuotaMode(saved["startupMode"]);
+    if (changed) saved["startupMode"] = "github";
+
+    const auto rotation = saved["rotation"].as<JsonObject>();
+    auto list = rotation["modes"].as<JsonArray>();
+    bool removed = false;
+    for (size_t i = list.size(); i > 0; --i) {
+        if (!removedQuotaMode(list[i - 1])) continue;
+        list.remove(i - 1);
+        removed = true;
+    }
+    if (!removed) return changed;
+
+    if (list.size() == 0) list.add("github");
+    if (list.size() < 2) rotation["enabled"] = false;
+    return true;
 }
 
 const char* applyRotation(JsonObjectConst input, Settings& settings) {
@@ -253,7 +277,9 @@ void SettingsStore::begin(Settings& settings, Credentials& credentials) {
         message.set(doc["message"]);
         doc.remove("message");
         Settings candidate;
+        const bool removedQuota = !legacy && removeStoredQuotaModes(doc.as<JsonObject>());
         if (legacy) {
+            candidate.rotationCount = 5;
             candidate.rotationModes[2] = display::Mode::Stats;
             candidate.rotationModes[3] = display::Mode::Pomodoro;
             candidate.rotationModes[4] = display::Mode::Message;
@@ -272,9 +298,9 @@ void SettingsStore::begin(Settings& settings, Credentials& credentials) {
         }
         if (applySettings(doc.as<JsonObjectConst>(), candidate) || !message.is<JsonObject>() ||
             applyMessage(message.as<JsonObjectConst>(), candidate)) continue;
-        if (legacy) migrateModes(candidate);
+        if (legacy) migrateV1Modes(candidate);
         settings = candidate;
-        if (legacy && !save(settings)) Serial.println("Could not persist settings migration.");
+        if ((legacy || removedQuota) && !save(settings)) Serial.println("Could not persist settings migration.");
         break;
     }
 

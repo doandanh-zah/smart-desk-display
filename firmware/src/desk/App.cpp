@@ -5,7 +5,7 @@
 
 namespace desk {
 namespace {
-constexpr char version[] = "1.2.3";
+constexpr char version[] = "1.2.4";
 constexpr char setupAddress[] = "192.168.4.1";
 constexpr time_t validEpoch = 1704067200;
 
@@ -112,8 +112,6 @@ void App::render() {
         countdown_.state(), countdown.durationSeconds, countdown.targetEpochSeconds, countdown_.remaining(epoch_),
     };
     frame.calendar = &integrations_.calendar();
-    frame.codex = &integrations_.codex();
-    frame.claude = &integrations_.claude();
     frame.message = {settings_.text.c_str(), settings_.alignment, settings_.color, settings_.size};
     frame.clock.showSeconds = settings_.clockShowSeconds;
     struct tm local;
@@ -249,9 +247,11 @@ ApiResult App::get(const String& path, JsonDocument& response) const {
         writeSettings(out, settings_);
     } else if (path == "/api/countdown") {
         countdownStatus(out);
-    } else if (path == "/api/integrations" || path == "/api/calendar" ||
-               path == "/api/quota/codex" || path == "/api/quota/claude") {
-        integrations_.write(out, path);
+    } else if (path == "/api/integrations") {
+        out["v"] = 1;
+        integrations_.writeCalendar(out["calendar"].to<JsonObject>());
+    } else if (path == "/api/calendar") {
+        integrations_.writeCalendar(out);
     } else if (path == "/api/github") {
         githubStatus(out);
         const auto& data = github_.data();

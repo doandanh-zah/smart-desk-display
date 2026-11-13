@@ -1,10 +1,12 @@
 # Display modes and device data v2
 
-The main selector, startup selector and new rotation UI offer these IDs in order: `github`, `clock` (Clock + Calendar), `countdown`, `codex`, `claude`. Use `codex` and `claude` as mode and provider IDs. GitHub keeps its current layout. Existing `stats`, `pomodoro`, `message` IDs and endpoints remain accepted for older clients.
+The main selector, startup selector, and rotation UI offer `github`, `clock` (Clock + Calendar), and `countdown`. Existing `stats`, `pomodoro`, and `message` IDs and endpoints remain accepted for older clients.
 
 ## Migration
 
-Firmware reads `smartdesk/config-v2` first and imports `config-v1` once when missing. On import, startup `stats` maps to `github`, `pomodoro` to `countdown`, and `message` to `github`. Rotation maps stats and pomodoro in the same way, drops message, deduplicates in first-seen order and disables rotation when fewer than two entries remain. An empty list becomes `["github"]`. Keep legacy message text, theme, GitHub, device name, clock seconds and interval. Keep the original config-v1 key, Wi-Fi blob and remote credential. Later explicit legacy API selections remain valid. New installs default to the five current IDs in rotation, disabled by default. Up to five unique rotation entries.
+Firmware loads `smartdesk/config-v2` first and imports `config-v1` when needed. While loading stored v2 only, a `codex` or `claude` startup becomes `github`. Both quota IDs are removed from rotation in place, retaining the order of other modes. An empty list becomes `["github"]`; rotation is disabled if fewer than two entries remain. The normalized config is saved back to `config-v2`. Live LAN/cloud commands that select or add a removed mode are rejected.
+
+On v1 import, startup `stats` and `message` become `github`, and `pomodoro` becomes `countdown`. Rotation maps stats and pomodoro in the same way, drops message, deduplicates in first-seen order, and uses the same minimum-size rule. The v1 key, Wi-Fi blob, remote pairing, GitHub settings, theme, clock settings, countdown configuration, and legacy message settings are preserved. New installs default to the three current IDs in rotation, disabled. The legacy API supports up to five unique rotation entries.
 
 ## Countdown
 
@@ -18,15 +20,17 @@ Add `GET /api/countdown` and `POST /api/countdown`. The GET object also appears 
 - `{"action":"configure","kind":"target","targetEpochSeconds":1794560000}` accepts Unix UTC seconds in 2024–2099 inclusive. Configure saves and arms immediately, even before NTP. With no valid clock, state is `waiting_for_time` and remainingSeconds is null. With time, remaining is max(target−now,0); states `running` / `completed`. Pause returns 409 `action_not_supported`. Reset disarms the target and persists that choice. Start rearms if disarmed. Target config and armed state survive reboot, then resume against NTP. A disarmed target has state `idle`, remainingSeconds null. A completed target stays complete for the current boot until explicitly reconfigured or reset. UTC epoch is authoritative, with the target displayed in ICT.
 - For either kind, `durationSeconds` retains the configured duration and `targetEpochSeconds` is null for duration. `countdown` is an optional addition to cloud status for old devices. Cloud command type `countdown` mirrors the LAN route and inherits remote ACK rules.
 
-## Calendar and quota
+## Calendar
 
-LAN `GET /api/calendar`, `GET /api/quota/codex`, and `GET /api/quota/claude` return the corresponding individual objects in the [remote integration projection](remote-admin-contract.md#dữ-liệu-calendar-và-quota-v1). A combined LAN `GET /api/integrations` returns the same v1 envelope as `GET /api/admin/integrations`. Use `state: "unavailable"`, `observedAt: null`, and empty arrays before a provider is connected. Distinguish `unsupported` when the provider reports it.
+LAN `GET /api/calendar` returns the Calendar object. LAN `GET /api/integrations` returns `{"v":1,"calendar":{...}}`. Former quota routes return 404. The Calendar projection retains its existing state, timestamp, timezone, and event fields. Local routes return the cached filtered Calendar and expire stale events as before.
 
-Authenticated device sync requests `wantIntegrations:true` about once per minute and reads optional `integrations` using the same v1 envelope. Use server-filtered titles only, bounded to 64 UTF-8 bytes in the ESP32 cache, with an ASCII fallback for TFT. Keep only three events and two windows per provider, never save OAuth or account credentials on ESP32, and use no additional network task. Local read routes return cached filtered data; snapshots age out while disconnected. Use response max 4 KiB and integration projection max 2 KiB for UTF-8 titles and three snapshots. The device projects the clock in ICT and uses UTC epoch for arithmetic.
+Authenticated device sync requests `wantIntegrations:true` about once per minute. The ESP32 accepts the v1 Calendar projection with or without the former quota fields and retains only Calendar. The HTTPS body limit remains 4 KiB for transition compatibility. The Calendar object has a 2 KiB limit, keeps up to three events with titles capped at 64 UTF-8 bytes, and displays supported Latin characters without accents on TFT. The device projects the clock in ICT and uses UTC epoch for arithmetic.
+
+During rollout the cloud accepts old device snapshots containing `codex`/`claude` so pairing and sync continue. The updated admin UI tolerates legacy IDs in snapshots and excludes them from its controls. The cloud rejects newly submitted quota-mode commands. Roll out the new firmware and matching LittleFS/web client together.
 
 ## TFT C++ interface
 
-Append `Countdown, Codex, Claude` to `display::Mode`, retaining existing members and numeric values. Extend `Frame` with:
+`display::Mode` retains the numeric values of all remaining members. The following fields support Countdown and Calendar:
 
 ```cpp
 enum class CountdownKind : uint8_t { Duration, Target };
@@ -50,22 +54,9 @@ struct CalendarData {
     uint8_t count = 0;
     CalendarEvent events[3]{};
 };
-struct QuotaWindow {
-    char label[21]{};
-    int16_t usedPercent = -1;
-    uint64_t resetEpochSeconds = 0;
-};
-struct QuotaData {
-    SourceState state = SourceState::NotConnected;
-    uint64_t updatedAt = 0;
-    uint8_t count = 0;
-    QuotaWindow windows[2]{};
-};
 // In Frame:
 CountdownData countdown;
 const CalendarData* calendar = nullptr;
-const QuotaData* codex = nullptr;
-const QuotaData* claude = nullptr;
 ```
 
 Core owns stable data for the duration of render, including pointed-to arrays. Null source pointer has the same semantics as NotConnected. ClockData stays in ICT, uses the ESP32 clock after sync even while offline, and exposes current local date for the calendar view.
