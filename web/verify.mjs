@@ -73,7 +73,7 @@ try {
     await expectText(page, "#wifi-ip", "127.0.0.1");
     await expectText(page, "#wifi-hostname", "smart-desk-fixture.local");
     await page.locator("#diagnostics > summary").click();
-    assert.deepEqual(await pixel(page), [320, 240, 14, 23, 22, 255]);
+    assert.deepEqual(await pixel(page), [320, 240, 16, 20, 25, 255]);
     for (const width of [320, 375, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 850 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
@@ -247,6 +247,29 @@ try {
     const levels = [[48, 58, 70], [18, 86, 56], [33, 132, 90], [66, 185, 120], [140, 242, 172]];
     assert.deepEqual(painted, [...data.levels.slice(196)].map((level) => levels[level]));
     assert.equal(await page.locator("#calendar-grid span").count(), 364);
+    const surfaces = () => page.evaluate(() => {
+      const ctx = document.querySelector("#preview").getContext("2d");
+      const readColor = (selector) => getComputedStyle(document.querySelector(selector)).backgroundColor;
+      return {
+        canvas: [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3),
+        panel: [...ctx.getImageData(20, 100, 1, 1).data].slice(0, 3),
+        calendar: readColor("#calendar"),
+        grid: readColor("#calendar-grid"),
+        key: readColor('#calendar-key [data-level="4"]'),
+      };
+    });
+    assert.deepEqual(await surfaces(), {
+      canvas: [16, 20, 25], panel: [27, 33, 42],
+      calendar: "rgb(16, 20, 25)", grid: "rgb(27, 33, 42)", key: "rgb(140, 242, 172)",
+    });
+    await page.getByRole("link", { name: "Cài đặt" }).click();
+    await page.getByLabel("Giao diện TFT").selectOption("light");
+    await button(page, "Lưu cài đặt").click();
+    await expectText(page, "#settings-feedback", "Đã lưu cài đặt.");
+    assert.deepEqual(await surfaces(), {
+      canvas: [245, 246, 248], panel: [255, 255, 255],
+      calendar: "rgb(245, 246, 248)", grid: "rgb(255, 255, 255)", key: "rgb(25, 92, 55)",
+    });
     assert.equal(await page.locator("#calendar-grid").evaluate((grid) => [...grid.children].map((cell) => cell.dataset.level).join("")), data.levels);
     assert.equal(await page.locator(".identity img").evaluate((image) => image.naturalWidth), 144);
     await legacyMode(page, "Thống kê GitHub");

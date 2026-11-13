@@ -13,11 +13,6 @@
   --danger: #ffaaa2;
   --radius: 10px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --heat-0: #303a46;
-  --heat-1: #125638;
-  --heat-2: #21845a;
-  --heat-3: #42b978;
-  --heat-4: #8cf2ac;
   font: 100%/1.5 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -176,7 +171,38 @@ dialog .actions { justify-content: flex-end; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
-.calendar-grid { background: #161b22; }
+/* Neutral GitHub surfaces mirror the TFT. The dashboard chrome stays dark. */
+.github-screen, .calendar {
+  --github-canvas: #101419;
+  --github-panel: #1b212a;
+  --line: #39434f;
+}
+.github-screen, .calendar { background: var(--github-canvas); }
+.github-screen .screen-frame { background: var(--github-panel); }
+.calendar {
+  --heat-0: #303a46;
+  --heat-1: #125638;
+  --heat-2: #21845a;
+  --heat-3: #42b978;
+  --heat-4: #8cf2ac;
+}
+.calendar.github-light {
+  --github-canvas: #f5f6f8;
+  --github-panel: #ffffff;
+  --line: #d3d9e1;
+  --text: #202832;
+  --muted: #46515e;
+  --accent: #195c37;
+  --warning: #784d14;
+  --heat-0: #cad9cf;
+  --heat-1: #a6cdae;
+  --heat-2: #6dae82;
+  --heat-3: #368050;
+  --heat-4: #195c37;
+  color-scheme: light;
+  color: var(--text);
+}
+.calendar-grid { background: var(--github-panel); }
 .mode-card { text-decoration: none; }
 #quota-link[aria-current="page"], #quota-link.quota-active { border-color: var(--accent); color: var(--accent); }
 .quota-back { text-decoration: none; }

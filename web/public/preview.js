@@ -73,12 +73,12 @@ window.createDeskPreview = function createDeskPreview(canvas) {
   };
   const githubPalettes = {
     dark: {
-      bg: "#0e1716", surface: "#161b22", line: "#354d46", text: "#eff8f2", muted: "#a5beb4",
+      bg: "#101419", surface: "#1b212a", line: "#39434f", text: "#eff8f2", muted: "#a5beb4",
       accent: "#8de1b5", warning: "#eac47d", error: "#ffaca5",
       levels: ["#303a46", "#125638", "#21845a", "#42b978", "#8cf2ac"],
     },
     light: {
-      bg: "#f3f7f2", surface: "#eaf0eb", line: "#bccfc2", text: "#142820", muted: "#4b645a",
+      bg: "#f5f6f8", surface: "#ffffff", line: "#d3d9e1", text: "#142820", muted: "#4b645a",
       accent: "#216441", warning: "#784d14", error: "#a42f2a",
       levels: ["#cad9cf", "#a6cdae", "#6dae82", "#368050", "#195c37"],
     },

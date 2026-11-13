@@ -198,6 +198,7 @@ function renderPreview(timer) {
   label("preview-description", `${fixture ? "Giả lập · " : ""}${!online && status ? "Trạng thái gần nhất · " : ""}${caption}`);
   if (previewMode !== mode) {
     previewMode = mode;
+    byId("screen").classList.toggle("github-screen", mode === "github");
     if (modeTools[mode]) {
       if (mode === "pomodoro" || mode === "message") byId("legacy-tools").open = true;
       modeTools[mode].open = true;
@@ -240,6 +241,7 @@ function syncPetMotion() {
 }
 
 function renderCalendar() {
+  byId("calendar").classList.toggle("github-light", config?.theme === "light");
   const data = github || emptyGithub;
   const unavailable = !online && !!byId("offline-message").textContent;
   label("calendar-state", !github && unavailable ? "Chưa có dữ liệu" : githubNames[data.state] || "Chưa có dữ liệu");
