@@ -86,11 +86,11 @@ void DisplayManager::render(const Frame& frame) {
       {rgb565(0xEBEDF0), rgb565(0x9BE9A8), rgb565(0x40C463), rgb565(0x30A14E), rgb565(0x216E39)}};
 
   static constexpr Palette githubDark{
-      rgb565(0x0E1716), rgb565(0x161B22), rgb565(0x354D46), rgb565(0xEFF8F2),
+      rgb565(0x101419), rgb565(0x1B212A), rgb565(0x39434F), rgb565(0xEFF8F2),
       rgb565(0xA5BEB4), rgb565(0x8DE1B5), rgb565(0xEAC47D), rgb565(0xFFACA5),
       {rgb565(0x303A46), rgb565(0x125638), rgb565(0x21845A), rgb565(0x42B978), rgb565(0x8CF2AC)}};
   static constexpr Palette githubLight{
-      rgb565(0xF3F7F2), rgb565(0xEAF0EB), rgb565(0xBCCFC2), rgb565(0x142820),
+      rgb565(0xF5F6F8), rgb565(0xFFFFFF), rgb565(0xD3D9E1), rgb565(0x142820),
       rgb565(0x4B645A), rgb565(0x216441), rgb565(0x784D14), rgb565(0xA42F2A),
       {rgb565(0xCAD9CF), rgb565(0xA6CDAE), rgb565(0x6DAE82), rgb565(0x368050), rgb565(0x195C37)}};
 

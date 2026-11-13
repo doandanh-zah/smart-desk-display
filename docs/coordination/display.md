@@ -10,9 +10,23 @@ Splash hiện tên thiết bị và trạng thái khởi động. Setup hiện t
 
 Toàn màn hình được xóa khi render lần đầu hoặc khi đổi view, mode đang hiển thị hoặc theme của mode có hỗ trợ. Các frame tiếp theo chỉ vẽ lại vùng có dữ liệu hiển thị thay đổi. Heatmap giữ 364 mức cũ để vẽ từng ô thay đổi trong một giao dịch SPI. Clock và Pomodoro thay từng ký tự trong dãy số khi chiều dài giữ nguyên, đồng hồ có vùng giây riêng. Thanh timer cập nhật theo số pixel chênh lệch. Renderer không cấp phát framebuffer.
 
-## 1.2.0 tiếp theo · palette TFT/preview và quota
+## GitHub · nền và thẻ trung tính
 
-**Cho 04 và 06 kiểm chéo:** dùng chính xác các token dưới đây ở cả TFT và web preview. So cả hai theme tại 320×240, kiểm tra 5 mức trong legend và ô 0 so với thẻ. Các tọa độ GitHub, 24 tuần, bo 1 px và ZAH NFT giữ theo bảng bố cục bên dưới.
+Thông số cho session 04 và 06. Chỉ thay ba token bao quanh heatmap GitHub. Hai dải năm mức từ bản tăng tương phản giữ nguyên để đối chiếu A/B. Các theme của mode khác dùng token hiện hành.
+
+| Token GitHub | Dark | Light |
+| --- | --- | --- |
+| Canvas | `#101419` | `#F5F6F8` |
+| Thẻ heatmap | `#1B212A` | `#FFFFFF` |
+| Đường phân cách | `#39434F` | `#D3D9E1` |
+
+Ảnh A/B tại `.dev/display-check/github-neutral/compare.png`. Mỗi ô ảnh là một canvas 320×240 cùng dữ liệu. Trái là nền cũ, phải là nền trung tính. Dark ở hàng trên, Light ở hàng dưới. Khoảng cách L* của ô 0 với thẻ sau RGB565 là 11,4 ở Dark và 14,0 ở Light. So với bản tăng tương phản ngay trước đó, Dark giảm từ 15,5 và Light tăng từ 9,4. Cả hai vẫn cao hơn 4,7 của bản 1.2.0. Khoảng cách tối thiểu giữa các mức đóng góp giữ nguyên ở 8,1 và 6,8. Vì vậy giữ nguyên cả năm mức.
+
+Fixture UBSan và build ESP32 tích hợp đạt. 06 kiểm chéo Canvas/TFT ở cả hai theme, sprite và lưới web tại 390/1.440 px đều đạt. Log `.dev/logs/display-github-neutral-{rgb565,host,build}.log` và `.dev/logs/integration-neutral-heatmap.log`. Nghiệm thu panel thật thực hiện sau khi 01 nạp ảnh được build từ SHA tích hợp đã chốt.
+
+## Đợt trước · palette TFT/preview và quota
+
+Các token của đợt tăng tương phản trước lần đổi nền trung tính.
 
 | Token | Dark | Light |
 | --- | --- | --- |
@@ -37,9 +51,9 @@ Interface để 02 nối: `QuotaWindow::windowMinutes` là độ dài thật (0 
 
 | Token | Dark | Light |
 | --- | --- | --- |
-| Nền | `#0E1716` | `#F3F7F2` |
-| Thẻ heatmap | `#161B22` | `#EAF0EB` |
-| Đường phân cách | `#354D46` | `#BCCFC2` |
+| Nền | `#101419` | `#F5F6F8` |
+| Thẻ heatmap | `#1B212A` | `#FFFFFF` |
+| Đường phân cách | `#39434F` | `#D3D9E1` |
 | Chữ chính | `#EFF8F2` | `#142820` |
 | Chữ phụ | `#A5BEB4` | `#4B645A` |
 | Nhấn, streak và live | `#8DE1B5` | `#216441` |
@@ -63,7 +77,7 @@ Nguồn preview lấy `config.githubUsername`, `localEpoch` và trạng thái Gi
 
 ### Palette lịch sử lấy mẫu từ ảnh legend
 
-Ảnh `.dev/references/github-dark-heatmap.png` 1432×292. Lấy màu giữa năm ô tại y=258, x=1170/1198/1226/1254/1282. Vùng 9×9 quanh mỗi tâm có cùng một màu với alpha FF. Phiên bản trước dùng trực tiếp `#161B22 #16391A #346A35 #529E4E #79D071`, quy đổi RGB565 `10C4 11C3 3346 54E9 7E8E`. Light tiếp tục dùng palette nền sáng ở bảng trên để giữ thang tương phản. Legend và lưới dùng cùng token, bố cục 24 tuần và sprite ZAH NFT giữ theo các hàng trên.
+Ảnh `.dev/references/github-dark-heatmap.png` 1432×292. Lấy màu giữa năm ô tại y=258, x=1170/1198/1226/1254/1282. Vùng 9×9 quanh mỗi tâm có cùng một màu với alpha FF. Phiên bản trước dùng trực tiếp `#161B22 #16391A #346A35 #529E4E #79D071`, quy đổi RGB565 `10C4 11C3 3346 54E9 7E8E`. Thông số đang dùng nằm trong bảng bố cục GitHub.
 
 ### Sprite cho session 04
 
