@@ -428,3 +428,23 @@ nạp. Bộ lệnh chuẩn bị cục bộ ở
 - TFT mới còn cần xác nhận trực quan: nền và thẻ GitHub trung tính,
   ô 0 tách nền, các mức xanh dễ phân biệt, mascot ổn định khi heatmap
   cập nhật. 06 tiếp tục đo độ trễ lệnh cloud sau rollout.
+
+## Rollout 1.2.2 · tiêu đề lịch và Wi-Fi cài đặt
+
+- Đối chiếu toàn bộ nguồn firmware trong bản trích xuất sạch với commit
+  `8a9a9b8f9df156627c7da9abfbb84a5a7f9bfeb5`. Build ESP32 đạt. Firmware
+  SHA-256 `766a1a365d7b70bc667aa93b76d116a8d1aca813d175efa3ae285593fc7c746e`.
+  Kiểm thử host của phiên firmware xác nhận `Họp` → `Hop` trên dữ liệu
+  dành cho TFT và giữ tiêu đề gốc ở API.
+- Mac đang ở mạng `192.168.33.x`, không truy cập được IP LAN cũ
+  `192.168.88.192` hoặc tên mDNS trước nạp. Không đo được trạng thái timer
+  qua LAN trước reboot. Esptool xác nhận ESP32-D0WD-V3 revision 3.1,
+  flash 4 MB, MAC đuôi `94:60`. Ghi riêng ứng dụng tại `0x10000`
+  ở 460800 baud, xác minh digest đạt. Giữ LittleFS, NVS và remote token.
+- Serial xác nhận khởi động flash bình thường và mở AP `Zah Desk`,
+  địa chỉ cài đặt `http://192.168.4.1/`. Không quan sát thấy station
+  nhận IP hay sync Production trong cửa sổ đo. Đã đóng serial.
+- Cần người dùng kết nối AP bằng mật khẩu đã chọn, mở trang cài đặt
+  và chọn Wi-Fi 2,4 GHz khả dụng. Sau đó xác minh phiên bản qua API,
+  heartbeat Production và quan sát trực tiếp tiêu đề lịch trên TFT.
+  Log `.dev/logs/hardware-calendar-wifi-1.2.2-{identify,flash,boot}.log`.
