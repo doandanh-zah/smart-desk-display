@@ -469,3 +469,26 @@ nạp. Bộ lệnh chuẩn bị cục bộ ở
   `CALENDAR LIVE`. TFT chưa được quan sát trực tiếp trong lần nạp này.
   Mode đang ở GitHub. Người dùng chọn Đồng hồ + Lịch để đối chiếu.
   Log `.dev/logs/hardware-1.2.3-{flash,lan}.log`.
+
+## Rollout 1.2.4 · gỡ quota Codex và Claude
+
+- Đã nạp ảnh từ commit chung `e3d5133b6a19402778245848be5aa7d842bcb703`
+  theo handoff 06. Firmware SHA-256
+  `c8c8965cddc787627426ef2a7f25f5212559ab89d30169af5c487b0f470381dd`.
+  LittleFS SHA-256
+  `9a2f6d8b1b214dd21c5e3d68375de5b723061344d32bcee5a18da990ed1f74bc`.
+  Giải nén LittleFS và đối chiếu sáu asset với nguồn đã commit.
+- Kiểm tra lại ngay trước nạp thấy firmware 1.2.3, cả Countdown và
+  Pomodoro idle. Mode đang chiếu và startup đã là Clock, khác baseline
+  Codex trước đó. Do vậy không quan sát migration từ quota trên board
+  thật ở lần này. Fixture NVS của firmware có kiểm trường hợp đó.
+- Esptool nhận đúng chip/MAC và xác minh cả app tại `0x10000` lẫn
+  LittleFS tại `0x210000`. Giữ NVS và credential, đã nhả serial.
+  Sau boot ESP32 báo 1.2.4 và tự nối Wi-Fi tại `http://192.168.34.38/`.
+  Toàn bộ config khớp snapshot ngay trước nạp, Clock vẫn là startup.
+- NTP UTC+7, GitHub live và Calendar live một sự kiện. Calendar về lại
+  sau boot qua sync Production, xác nhận ghép nối còn hoạt động.
+  Strict HTTP, Countdown và Calendar đạt. Hai route quota trả 404
+  và projection LAN không còn `quotas`. Sáu asset LAN khớp byte với
+  cùng commit. Log `.dev/logs/hardware-1.2.4-{flash,lan}.log`.
+  Lần này không đổi mode qua API hoặc trực tiếp quan sát TFT.
