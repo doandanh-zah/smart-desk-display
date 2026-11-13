@@ -32,10 +32,12 @@ private:
     bool storageReady_ = false;
     bool active_ = false;
     bool askedIntegrations_ = false;
+    bool sentPollHints_ = false;
+    uint32_t pollHintsAt_ = 0;
     uint32_t integrationsAt_ = 0;
     uint32_t nextAttempt_ = 0;
-    uint32_t retryMs_ = remote::PollSchedule::idleMs;
-    uint32_t pollHintMs_ = remote::PollSchedule::idleMs;
+    uint32_t retryMs_ = remote::PollSchedule::legacyMs;
+    uint32_t pollHintMs_ = remote::PollSchedule::legacyMs;
     remote::PollSchedule pollSchedule_;
     char token_[remote::tokenLength + 1] = {};
     struct Diagnostics {

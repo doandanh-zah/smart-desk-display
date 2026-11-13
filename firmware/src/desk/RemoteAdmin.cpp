@@ -21,7 +21,8 @@ constexpr char statusCommand[] = "desk-remote-status";
 constexpr uint32_t heapCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
 constexpr size_t requestLimit = 6144;
 constexpr size_t responseLimit = 4096;
-constexpr uint32_t pollMs = remote::PollSchedule::idleMs;
+constexpr uint32_t baseRetryMs = remote::PollSchedule::legacyMs;
+constexpr uint32_t legacyProbeMs = 300000;
 constexpr uint32_t maxRetryMs = 300000;
 constexpr uint32_t workerStack = 10240;
 constexpr int networkTimeoutMs = 5000;
@@ -43,13 +44,15 @@ bool fitsHeap() {
         heap_caps_get_largest_free_block(heapCaps) >= 28 * 1024;
 }
 
-bool writeRequest(App& app, uint64_t epoch, const remote::Journal& journal, bool integrations, String& buffer) {
+bool writeRequest(App& app, uint64_t epoch, const remote::Journal& journal,
+                  bool integrations, bool pollHints, String& buffer) {
     JsonDocument doc;
     if (!app.remoteSnapshot(doc)) return false;
     doc["v"] = 1;
     doc["ts"] = epoch;
     doc["nonce"] = nonce();
     if (integrations) doc["wantIntegrations"] = true;
+    if (pollHints) doc["pollHints"] = true;
     if (journal.pending) {
         JsonObject ack = doc["ack"].to<JsonObject>();
         ack["id"] = journal.latest.id;
@@ -68,6 +71,7 @@ bool writeRequest(App& app, uint64_t epoch, const remote::Journal& journal, bool
 void RemoteAdmin::begin() {
     nextAttempt_ = millis();
     integrationsAt_ = nextAttempt_;
+    pollHintsAt_ = nextAttempt_;
     storageReady_ = store_.begin("deskremote", false);
     if (!storageReady_) return;
     if (store_.isKey(journalKey)) {
@@ -116,7 +120,7 @@ void RemoteAdmin::provision(uint32_t now) {
                         store_.putString(tokenKey, token) == remote::tokenLength) {
                         memcpy(token_, token, sizeof(token_));
                         nextAttempt_ = now;
-                        retryMs_ = pollMs;
+                        retryMs_ = baseRetryMs;
                         Serial.println("Remote admin credential saved.");
                     } else {
                         Serial.println("Remote admin provisioning failed.");
@@ -152,12 +156,20 @@ void RemoteAdmin::tick(App& app, bool online, time_t epoch, uint32_t now) {
         request_ = String();
         const auto before = journal_.latest;
         const bool wasPending = journal_.pending;
-        pollHintMs_ = pollMs;
+        pollHintMs_ = remote::PollSchedule::legacyMs;
         const bool ok = transportOk && online && epoch > 0 && receive(app, static_cast<uint64_t>(epoch));
+        if (sentPollHints_) {
+            if (!ok && diagnostics_.httpStatus == 400) {
+                // Older strict schemas reject unknown request fields.
+                pollHintsAt_ = now + legacyProbeMs;
+            } else {
+                pollHintsAt_ = now;
+            }
+        }
         if (askedIntegrations_) {
             if (!ok && diagnostics_.httpStatus == 400) {
                 // Older cloud rejects the optional request field. Probe again after a rollout window.
-                integrationsAt_ = now + 300000;
+                integrationsAt_ = now + legacyProbeMs;
             } else if (ok) {
                 integrationsAt_ = now + 60000;
             }
@@ -165,14 +177,14 @@ void RemoteAdmin::tick(App& app, bool online, time_t epoch, uint32_t now) {
         response_ = String();
         const bool newAck = journal_.pending && (!wasPending || strcmp(before.id, journal_.latest.id) != 0);
         nextAttempt_ = now + (ok ? pollSchedule_.afterSuccess(now, newAck, pollHintMs_) : retryMs_);
-        retryMs_ = ok ? pollMs : std::min(retryMs_ * 2, maxRetryMs);
+        retryMs_ = ok ? baseRetryMs : std::min(retryMs_ * 2, maxRetryMs);
     }
 
     provision(now);
     if (!storageReady_ || !token_[0] || !online || epoch <= 0 ||
         static_cast<int32_t>(now - nextAttempt_) < 0 || xTaskGetHandle("github_fetch")) return;
     if (!fitsHeap()) {
-        nextAttempt_ = now + pollMs;
+        nextAttempt_ = now + baseRetryMs;
         return;
     }
 
@@ -183,7 +195,9 @@ void RemoteAdmin::tick(App& app, bool online, time_t epoch, uint32_t now) {
     }
     if (!results_) results_ = xQueueCreateStatic(1, sizeof(bool), queueStorage_, &queueState_);
     askedIntegrations_ = static_cast<int32_t>(now - integrationsAt_) >= 0;
-    active_ = results_ && writeRequest(app, epoch, journal_, askedIntegrations_, request_) &&
+    sentPollHints_ = static_cast<int32_t>(now - pollHintsAt_) >= 0;
+    if (sentPollHints_) pollHintsAt_ = now;
+    active_ = results_ && writeRequest(app, epoch, journal_, askedIntegrations_, sentPollHints_, request_) &&
         xTaskCreate(run, "desk_remote", workerStack, this, 1, nullptr) == pdPASS;
     if (!active_) {
         request_ = String();
