@@ -83,12 +83,13 @@ try {
     await page.setViewportSize(viewport);
     await page.reload();
     await expectText(page, "#connection", "Thiết bị giả lập");
+    const focusOrder = ["Đến nội dung chính", "Điều khiển", "Lịch GitHub", "Cài đặt", "Ví Solana", "Tạm dừng chuyển động"];
+    for (const name of focusOrder) {
+      await page.keyboard.press("Tab");
+      assert.equal(await page.locator(":focus").textContent(), name);
+    }
     await page.keyboard.press("Tab");
-    assert.equal(await page.locator(":focus").textContent(), "Đến nội dung chính");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
-    await page.keyboard.press("Tab");
+    assert.equal(await page.locator(":focus").getAttribute("data-mode"), "github");
     await page.keyboard.press("Tab");
     assert.equal(await page.locator(":focus").getAttribute("data-mode"), "clock");
     assert.equal(await page.locator(":focus").evaluate((el) => getComputedStyle(el).outlineWidth), "2px");
@@ -188,11 +189,15 @@ try {
     const canvas = page.locator("#preview");
     await canvas.scrollIntoViewIfNeeded();
     await expectText(page, "#preview-description", /Dữ liệu mẫu/);
-    const pause = button(page, "Tạm dừng chuyển động pet");
-    await pause.waitFor();
+    const pause = button(page, "Tạm dừng chuyển động");
+    const avatar = page.locator(".identity-avatar img");
+    const avatarAnimation = () => avatar.evaluate((img) => getComputedStyle(img).animationName);
     const sample = () => canvas.evaluate((el) => {
       const ctx = el.getContext("2d");
-      return [[45, 44], [53, 56], [33, 115]].map(([x, y]) => [...ctx.getImageData(x, y, 1, 1).data]);
+      return [
+        [...ctx.getImageData(19, 20, 54, 66).data],
+        [...ctx.getImageData(29, 113, 264, 54).data],
+      ];
     });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.locator("#pet-motion").waitFor({ state: "hidden" });
@@ -200,23 +205,68 @@ try {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.waitForFunction((before) => {
       const ctx = document.querySelector("#preview").getContext("2d");
-      return String([...ctx.getImageData(45, 44, 1, 1).data]) !== String(before);
-    }, idle[0], { timeout: 5200, polling: 40 });
-    await page.waitForFunction((before) => {
-      const ctx = document.querySelector("#preview").getContext("2d");
-      return String([...ctx.getImageData(53, 56, 1, 1).data]) !== String(before);
-    }, idle[1], { timeout: 5200, polling: 40 });
-    assert.deepEqual((await sample())[2], idle[2]);
+      return ctx.getImageData(19, 20, 54, 66).data.some((channel, index) => channel !== before[index]);
+    }, idle[0]);
+    assert.deepEqual((await sample())[1], idle[1]);
+    const expressions = await page.evaluate(() => {
+      const sprite = document.createElement("canvas");
+      const render = window.createDeskPreview(sprite);
+      render({ mode: "github", github: {}, localEpoch: null });
+      const ctx = sprite.getContext("2d");
+      const pixelAt = (x, y) => [...ctx.getImageData(x, y, 1, 1).data];
+      const eye = pixelAt(45, 44);
+      const mouth = pixelAt(53, 56);
+      render.pet(1000);
+      const closedEye = pixelAt(45, 42);
+      render.pet(2300);
+      const smile = pixelAt(53, 53);
+      const sparkle = pixelAt(22, 26);
+      return { eye, closedEye, mouth, smile, sparkle };
+    });
+    assert.notDeepEqual(expressions.closedEye, expressions.eye);
+    assert.notDeepEqual(expressions.smile, expressions.mouth);
+    assert.deepEqual(expressions.sparkle, [255, 246, 203, 255]);
+    await pause.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => getComputedStyle(document.querySelector(".identity-avatar img")).animationName === "avatar-float");
     await pause.click();
+    await button(page, "Bật chuyển động").waitFor();
+    assert.equal(await avatarAnimation(), "none");
     const frozen = await sample();
     await page.waitForTimeout(800);
     assert.deepEqual(await sample(), frozen);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.locator("#pet-motion").waitFor({ state: "hidden" });
+    assert.equal(await avatarAnimation(), "none");
     assert.deepEqual(await sample(), idle);
-    await page.waitForTimeout(1600);
-    assert.deepEqual(await sample(), idle);
-    console.log("PASS GitHub pet blink, smile, pause and reduced motion");
+    console.log("PASS GitHub pet poses, sparkle, dashboard pause and reduced motion");
+  });
+
+  await withFixture("modes-v2", async (page, origin) => {
+    const address = "FzcnaZMYcoAYpLgr7Wym2b8hrKYk3VXsRxWSLuvZKLJm";
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.getByRole("link", { name: "Ví Solana" }).click();
+    assert.equal(new URL(page.url()).hash, "#solana");
+    assert.equal(await page.locator(":focus").textContent(), "Địa chỉ nhận Solana");
+    assert.equal(await page.locator("#screen").isVisible(), false);
+    await page.waitForFunction(() => document.querySelector(".wallet-qr").naturalWidth > 0);
+    assert.equal(await page.getByLabel("Public key").inputValue(), address);
+    await button(page, "Sao chép địa chỉ").click();
+    await expectText(page, "#wallet-feedback", "Đã sao chép địa chỉ.");
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), address);
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", { value: undefined });
+    });
+    await button(page, "Sao chép địa chỉ").click();
+    await expectText(page, "#wallet-feedback", "Đã sao chép địa chỉ.");
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 850 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+    }
+    await page.getByRole("link", { name: "Về điều khiển" }).click();
+    await page.locator("#screen").waitFor();
+    await page.goto(origin + "/#solana");
+    await page.getByRole("heading", { name: "Địa chỉ nhận Solana" }).waitFor();
+    console.log("PASS Solana wallet navigation, QR and clipboard");
   });
 
   await withFixture("unsynced", async (page) => {
@@ -351,9 +401,21 @@ try {
     await expectText(page, "#month-events", /Sự kiện kiểm thử/);
     assert.equal(await page.locator("#month-days td[aria-current=date]").count(), 1);
     const month = await page.locator("#month-heading").textContent();
+    const event = (await api(origin, "calendar")).events[0];
+    const eventDay = new Date((event.start + 7 * 3600) * 1000);
+    const deviceDay = new Date(Date.now() + 7 * 3600 * 1000);
+    if (eventDay.getUTCMonth() === deviceDay.getUTCMonth()) {
+      const eventCell = page.locator(`#month-days td[aria-label="Ngày ${eventDay.getUTCDate()}, 1 sự kiện"]`);
+      await eventCell.locator(".month-event-dot").waitFor();
+    }
     await button(page, "Tháng sau").click();
     assert.notEqual(await page.locator("#month-heading").textContent(), month);
+    assert.equal(await page.locator("#month-days").evaluate((tbody) => tbody.getAnimations().length), 1);
+    assert.equal(await page.locator("#month-next").evaluate((el) => el === document.activeElement), true);
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await button(page, "Tháng hiện tại").click();
+    assert.equal(await page.locator("#month-days").evaluate((tbody) => tbody.getAnimations().length), 0);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     await expectText(page, "#month-heading", month);
 
     await mode(page, "Đếm ngược").click();

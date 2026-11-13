@@ -29,7 +29,7 @@ const messageText = byId("message-text");
 const rotationModes = [...settingsForm.querySelectorAll('[name="rotationMode"]')];
 const restartDialog = byId("restart-dialog");
 const previewCanvas = byId("preview");
-const petMotionButton = byId("pet-motion");
+const motionButton = byId("pet-motion");
 const draw = window.createDeskPreview(previewCanvas);
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const dateFormat = new Intl.DateTimeFormat("vi-VN", {
@@ -73,21 +73,43 @@ let selectedMonth;
 let monthKey;
 
 function revealLinkedPanel() {
-  if (location.hash === "#settings" || location.hash === "#calendar-tools") {
-    const panel = byId(location.hash.slice(1));
+  const hash = location.hash;
+  const walletOpen = hash === "#solana";
+  const wallet = byId("solana");
+  const changedView = wallet.hidden === walletOpen;
+  if (changedView) {
+    byId("dashboard-view").hidden = walletOpen;
+    wallet.hidden = !walletOpen;
+    if (walletOpen) byId("wallet-link").setAttribute("aria-current", "page");
+    else byId("wallet-link").removeAttribute("aria-current");
+  }
+  if (hash === "#settings" || hash === "#calendar-tools") {
+    const panel = byId(hash.slice(1));
     panel.open = true;
-    if (location.hash === "#calendar-tools") panel.scrollIntoView();
+    if (hash === "#calendar-tools") panel.scrollIntoView();
+  }
+  if (changedView && !byId("main").hidden) {
+    const target = walletOpen ? byId("wallet-title") : document.getElementById(hash.slice(1));
+    if (walletOpen) window.scrollTo(0, 0);
+    else target?.scrollIntoView();
+    const focus = target?.querySelector("summary") || target || byId("main");
+    focus.focus({ preventScroll: true });
   }
 }
 
 window.addEventListener("hashchange", revealLinkedPanel);
+document.querySelector(".skip-link").addEventListener("click", (event) => {
+  if (byId("solana").hidden) return;
+  event.preventDefault();
+  byId("wallet-title").focus();
+});
 document.querySelector('.nav a[href="#settings"]').addEventListener("click", () => {
   byId("settings").open = true;
 });
 revealLinkedPanel();
 let previewVisible = false;
 let petClock = null;
-let petPaused = false;
+let motionPaused = false;
 
 function label(id, text) {
   const element = byId(id);
@@ -203,7 +225,7 @@ function renderPreview(timer) {
       modeTools[mode].open = true;
     }
     syncPetMotion();
-    if (mode && !reducedMotion.matches) {
+    if (mode && !motionPaused && !reducedMotion.matches) {
       previewCanvas.getAnimations().forEach((animation) => animation.cancel());
       previewCanvas.animate(
         [{ opacity: .78, transform: "translateY(2px)" }, { opacity: 1, transform: "none" }],
@@ -215,13 +237,12 @@ function renderPreview(timer) {
 
 function syncPetMotion() {
   const hasPet = previewMode === "github";
-  const motionAvailable = hasPet && !reducedMotion.matches;
-  if (!motionAvailable && document.activeElement === petMotionButton) {
-    modes.find((button) => button.dataset.mode === previewMode)?.focus();
-  }
-  petMotionButton.hidden = !motionAvailable;
-  label("pet-motion", petPaused ? "Phát chuyển động pet" : "Tạm dừng chuyển động pet");
-  const shouldAnimate = motionAvailable && !petPaused && previewVisible && !document.hidden;
+  const reduced = reducedMotion.matches;
+  if (reduced && document.activeElement === motionButton) byId("main").focus({ preventScroll: true });
+  motionButton.hidden = reduced;
+  label("pet-motion", motionPaused ? "Bật chuyển động" : "Tạm dừng chuyển động");
+  document.documentElement.classList.toggle("motion-paused", motionPaused || document.hidden || reduced);
+  const shouldAnimate = hasPet && !reduced && !motionPaused && previewVisible && !document.hidden;
   if (!shouldAnimate) {
     if (petClock !== null) {
       clearInterval(petClock);
@@ -354,7 +375,7 @@ function localToday() {
   return epoch == null ? null : new Date(epoch * 1000);
 }
 
-function renderMonth() {
+function renderMonth(direction = 0) {
   const today = localToday();
   const epoch = today?.getTime();
   const calendar = calendarSnapshot;
@@ -366,6 +387,7 @@ function renderMonth() {
   label("month-heading", date ? `Tháng ${date.getUTCMonth() + 1} / ${date.getUTCFullYear()}` : "Chưa có ngày thiết bị");
   ["month-prev", "month-next"].forEach((id) => { byId(id).disabled = !date; });
   byId("month-today").disabled = !today;
+  const events = ["live", "stale"].includes(calendar?.state) ? (calendar.events || []).slice(0, 3) : [];
   const rows = [];
   if (date) {
     const year = date.getUTCFullYear();
@@ -379,6 +401,16 @@ function renderMonth() {
         const element = row.insertCell();
         if (day < 1 || day > days) continue;
         element.textContent = day;
+        const dayStart = Date.UTC(year, month, day) / 1000 - 7 * 3600;
+        const matchingEvents = events.filter((event) => event.start < dayStart + 86400 && event.end > dayStart);
+        if (matchingEvents.length) {
+          element.classList.add("has-events");
+          const marker = document.createElement("span");
+          marker.className = "month-event-dot";
+          marker.setAttribute("aria-hidden", "true");
+          element.append(marker);
+          element.setAttribute("aria-label", `Ngày ${day}, ${matchingEvents.length} sự kiện`);
+        }
         if (today?.getUTCFullYear() === year && today.getUTCMonth() === month && today.getUTCDate() === day) {
           element.setAttribute("aria-current", "date");
         }
@@ -386,15 +418,22 @@ function renderMonth() {
       rows.push(row);
     }
   }
-  byId("month-days").replaceChildren(...rows);
+  const monthDays = byId("month-days");
+  monthDays.replaceChildren(...rows);
+  if (direction && !motionPaused && !reducedMotion.matches) {
+    monthDays.getAnimations().forEach((animation) => animation.cancel());
+    monthDays.animate(
+      [{ opacity: .55, transform: `translateX(${direction * 12}px)` }, { opacity: 1, transform: "none" }],
+      { duration: 240, easing: "ease-out" },
+    );
+  }
   label("month-source", `Google Calendar · ${sourceStates[calendar?.state] || sourceStates.unavailable}`);
   byId("calendar-connect-actions").hidden = !remote || !(calendar?.canConnect || calendar?.connected);
   byId("calendar-connect").hidden = !calendar?.canConnect || !!calendar?.connected;
   byId("calendar-disconnect").hidden = !calendar?.connected;
-  const events = ["live", "stale"].includes(calendar?.state) ? calendar.events || [] : [];
   const list = byId("month-events");
   list.hidden = !events.length;
-  list.replaceChildren(...events.slice(0, 3).map((event) => {
+  list.replaceChildren(...events.map((event) => {
     const item = document.createElement("li");
     const day = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short" });
     item.textContent = `${event.title} · ${event.allDay ? day.format(event.start * 1000) + " · Cả ngày" : localDate(event.start * 1000) + " ICT"}`;
@@ -435,11 +474,15 @@ function changeMonth(delta) {
   const date = selectedMonth == null ? localToday() : new Date(selectedMonth);
   if (!date) return;
   selectedMonth = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1);
-  renderMonth();
+  renderMonth(delta);
 }
 byId("month-prev").addEventListener("click", () => changeMonth(-1));
 byId("month-next").addEventListener("click", () => changeMonth(1));
-byId("month-today").addEventListener("click", () => { selectedMonth = undefined; renderMonth(); });
+byId("month-today").addEventListener("click", () => {
+  const direction = selectedMonth == null ? 0 : Math.sign((localToday()?.getTime() ?? selectedMonth) - selectedMonth);
+  selectedMonth = undefined;
+  renderMonth(direction);
+});
 
 async function readCalendar(force = false) {
   if (!signedIn || (!remote && !status?.countdown) || calendarReading || (!force && performance.now() - calendarReadAt < 30000)) return;
@@ -899,7 +942,7 @@ async function initRemote() {
       if (!(await transport.session(input.value))) throw new Error("Không xác thực được phiên.");
       feedback("auth-feedback");
       setSignedIn(true);
-      byId("main").focus();
+      byId(location.hash === "#solana" ? "wallet-title" : "main").focus();
       revealLinkedPanel();
       schedulePoll(0);
     } catch (error) {
@@ -1095,14 +1138,43 @@ restartDialog.addEventListener("close", () => {
   });
 });
 byId("retry").addEventListener("click", () => schedulePoll(0));
+byId("wallet-copy").addEventListener("click", async () => {
+  const field = byId("wallet-address");
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+    await navigator.clipboard.writeText(field.value);
+  } catch {
+    // The ESP32 dashboard is also served over HTTP on the local network.
+    field.focus();
+    field.select();
+    if (!document.execCommand("copy")) {
+      feedback("wallet-feedback", "Địa chỉ đã được chọn. Bạn có thể sao chép thủ công.", "error");
+      return;
+    }
+    byId("wallet-copy").focus();
+  }
+  feedback("wallet-feedback", "Đã sao chép địa chỉ.", "success");
+});
+function cancelDashboardTransitions() {
+  for (const element of [previewCanvas, byId("month-days")]) {
+    element.getAnimations().forEach((animation) => animation.cancel());
+  }
+}
 reducedMotion.addEventListener("change", (event) => {
-  if (event.matches) previewCanvas.getAnimations().forEach((animation) => animation.cancel());
+  if (event.matches) cancelDashboardTransitions();
   syncPetMotion();
 });
-petMotionButton.addEventListener("click", () => {
-  petPaused = !petPaused;
+motionButton.addEventListener("click", () => {
+  motionPaused = !motionPaused;
+  if (motionPaused) cancelDashboardTransitions();
   syncPetMotion();
 });
+const motionObserver = new IntersectionObserver((entries) => {
+  for (const entry of entries) entry.target.classList.toggle("motion-visible", entry.isIntersecting);
+});
+for (const element of [document.querySelector(".intro"), byId("calendar"), byId("calendar-tools")]) {
+  motionObserver.observe(element);
+}
 new IntersectionObserver(([entry]) => {
   previewVisible = entry.isIntersecting;
   syncPetMotion();
@@ -1116,4 +1188,8 @@ setInterval(() => {
 }, 500);
 redirectRetiredPage();
 if (remote) initRemote();
-else { byId("main").hidden = false; poll(); }
+else {
+  byId("main").hidden = false;
+  if (location.hash === "#solana") byId("wallet-title").focus();
+  poll();
+}

@@ -6,7 +6,7 @@ const shared = await access(packaged).then(() => packaged, () => new URL('../web
 await mkdir(new URL('public/', project), { recursive: true });
 await mkdir(new URL('assets/', project), { recursive: true });
 await writeFile(new URL('public/robots.txt', project), 'User-agent: *\nDisallow: /\n');
-for (const file of ['index.html', 'styles.css', 'app.js', 'preview.js', 'transport.js', 'zah-avatar.webp']) {
+for (const file of ['index.html', 'styles.css', 'app.js', 'preview.js', 'transport.js', 'zah-avatar.webp', 'solana-devnet.png']) {
   await copyFile(new URL(file, shared), new URL('assets/' + file, project));
 }
 for (const file of ['login.html', 'remote-login.js']) {

@@ -35,6 +35,7 @@ const files = new Map([
   ["/preview.js", ["preview.js", "text/javascript"]],
   ["/transport.js", ["transport.js", "text/javascript"]],
   ["/zah-avatar.webp", ["zah-avatar.webp", "image/webp"]],
+  ["/solana-devnet.png", ["solana-devnet.png", "image/png"]],
 ]);
 let startedAt = performance.now();
 let rotationAt = startedAt;
@@ -257,9 +258,9 @@ async function route(req, res) {
   const file = files.get(path);
   if (file && ["GET", "HEAD"].includes(req.method)) {
     const [name, type] = file;
-    let content = await readFile(new URL(`./public/${name}`, import.meta.url), name === "zah-avatar.webp" ? undefined : "utf8");
+    let content = await readFile(new URL(`./public/${name}`, import.meta.url), type.startsWith("image/") ? undefined : "utf8");
     if (name === "index.html") content = content.replace('id="fixture-banner" hidden', 'id="fixture-banner" data-fixture="true"');
-    res.writeHead(200, { "Content-Type": `${type}; charset=utf-8`, "Cache-Control": "no-store" });
+    res.writeHead(200, { "Content-Type": type.startsWith("image/") ? type : `${type}; charset=utf-8`, "Cache-Control": "no-store" });
     res.end(req.method === "HEAD" ? undefined : content);
     return;
   }

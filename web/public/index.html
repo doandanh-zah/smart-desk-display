@@ -19,6 +19,7 @@
         <a href="#screen">Điều khiển</a>
         <a href="#calendar">Lịch GitHub</a>
         <a href="#settings">Cài đặt</a>
+        <a id="wallet-link" href="#solana">Ví Solana</a>
         <button class="button" id="logout" type="button" hidden>Đăng xuất</button>
       </nav>
     </div>
@@ -40,12 +41,16 @@
     </section>
   </main>
   <main class="shell" id="main" tabindex="-1" hidden>
+    <div id="dashboard-view">
     <div class="intro">
       <div class="identity">
-        <img src="./zah-avatar.webp" width="56" height="56" alt="">
+        <span class="identity-avatar" aria-hidden="true"><img src="./zah-avatar.webp" width="56" height="56" alt=""></span>
         <div><p class="eyebrow" id="connection-kind">MẠNG NỘI BỘ</p><h1 id="device-name">Bảng điều khiển</h1></div>
       </div>
-      <span class="badge" id="connection" role="status">Đang kết nối</span>
+      <div class="intro-actions">
+        <span class="badge" id="connection" role="status">Đang kết nối</span>
+        <button class="button motion-toggle" id="pet-motion" type="button" hidden>Tạm dừng chuyển động</button>
+      </div>
     </div>
     <div class="notice" id="fixture-banner" hidden>
       <p>Chế độ thử nghiệm · thao tác không gửi đến ESP32.</p>
@@ -56,7 +61,7 @@
     </div>
     <p class="feedback global-feedback" id="remote-feedback" role="status" hidden></p>
 
-    <div class="dashboard" id="screen">
+    <div class="dashboard" id="screen" tabindex="-1">
       <section class="mode-panel" aria-labelledby="modes-title">
         <header class="panel-head"><h2 id="modes-title">Chọn chế độ</h2></header>
         <div class="panel-body">
@@ -78,10 +83,7 @@
             <canvas id="preview" width="320" height="240" role="img" aria-labelledby="preview-title preview-description">Bản xem trước màn hình 320 × 240.</canvas>
           </div>
           <figcaption class="meta" id="preview-description">Đang đọc trạng thái thiết bị</figcaption>
-          <div class="preview-actions">
-            <span class="meta">320 × 240 px</span>
-            <button class="button pet-motion" id="pet-motion" type="button" hidden>Tạm dừng chuyển động pet</button>
-          </div>
+          <p class="meta preview-size">320 × 240 px</p>
         </figure>
       </section>
     </div>
@@ -194,7 +196,7 @@
       </div>
     </details>
 
-    <section class="panel controls calendar" id="calendar" aria-labelledby="calendar-title">
+    <section class="panel controls calendar" id="calendar" tabindex="-1" aria-labelledby="calendar-title">
       <header class="panel-head">
         <div><h2 id="calendar-title">Lịch đóng góp GitHub</h2><p class="meta">Toàn bộ 52 tuần · tuần cũ nhất ở bên trái</p></div>
         <span class="badge" id="calendar-state">Đang tải</span>
@@ -279,6 +281,24 @@
         <div><dt>Đồng bộ GitHub</dt><dd id="github-sync">—</dd></div>
       </dl>
     </details>
+    </div>
+
+    <section class="panel wallet-panel" id="solana" aria-labelledby="wallet-title" hidden>
+      <a class="wallet-back" href="#screen">← Về điều khiển</a>
+      <div class="wallet-identity">
+        <img src="./zah-avatar.webp" width="48" height="48" alt="">
+        <div><p class="meta">@lilzahcoder</p><p>dsuc.sol</p></div>
+        <span class="badge">Solana Devnet</span>
+      </div>
+      <h1 id="wallet-title" tabindex="-1">Địa chỉ nhận Solana</h1>
+      <img class="wallet-qr" src="./solana-devnet.png" width="344" height="344" loading="lazy" alt="Mã QR của địa chỉ nhận Solana Devnet bên dưới">
+      <label class="field wallet-address-label">Public key
+        <textarea id="wallet-address" rows="2" readonly spellcheck="false" wrap="soft">FzcnaZMYcoAYpLgr7Wym2b8hrKYk3VXsRxWSLuvZKLJm</textarea>
+      </label>
+      <button class="button primary wallet-copy" id="wallet-copy" type="button">Sao chép địa chỉ</button>
+      <p class="feedback" id="wallet-feedback" role="status"></p>
+      <p class="meta wallet-network">Chỉ dùng để nhận token trên Solana Devnet.</p>
+    </section>
   </main>
   <dialog id="restart-dialog" aria-labelledby="restart-dialog-title">
     <form method="dialog">

@@ -18,7 +18,7 @@ window.createDeskPreview = function createDeskPreview(canvas) {
       levels: ["#cad9cf", "#a6cdae", "#6dae82", "#368050", "#195c37"],
     },
   };
-  // Sprite and timing mirror firmware/src/display/GitHubPet.h.
+  // Pixel art mirrors GitHubPet.h. The web preview adds extra motion.
   const petColors = { ".": "#f8db6a", "K": "#171913", "H": "#422d1b", "D": "#2f3736", "L": "#baae94", "S": "#fcc695", "T": "#e89d70", "W": "#efe4c9", "O": "#f89f31", "R": "#ba4713" };
   const petPixels = [
     "..........KKKKKKKK.......",
@@ -62,7 +62,8 @@ window.createDeskPreview = function createDeskPreview(canvas) {
   let previousFrame = "";
   let previousMode;
   let petElapsed = 0;
-  let previousPetPose;
+  let previousPetFrame;
+  const petSprites = new Map();
 
   function box(x, y, width, height, fill) {
     ctx.fillStyle = fill;
@@ -115,9 +116,9 @@ window.createDeskPreview = function createDeskPreview(canvas) {
   }
 
   function githubPetPose(elapsed) {
-    const phase = elapsed % 4800;
-    if (phase >= 1400 && phase < 1600) return "blink";
-    if (phase >= 3000 && phase < 3460) return "smile";
+    const phase = elapsed % 5600;
+    if ((phase >= 920 && phase < 1120) || (phase >= 3940 && phase < 4100)) return "blink";
+    if ((phase >= 1900 && phase < 2780) || (phase >= 4400 && phase < 5070)) return "smile";
     return "idle";
   }
 
@@ -133,14 +134,32 @@ window.createDeskPreview = function createDeskPreview(canvas) {
     return petPixels[y][x];
   }
 
-  function paintGithubPet(pose, previous) {
+  function githubPetSprite(pose) {
+    if (petSprites.has(pose)) return petSprites.get(pose);
+    const sprite = document.createElement("canvas");
+    sprite.width = 50;
+    sprite.height = 62;
+    const ink = sprite.getContext("2d");
     petPixels.forEach((row, y) => {
       for (let x = 0; x < row.length; x += 1) {
         const pixel = githubPetPixel(pose, x, y);
-        const old = previous ? githubPetPixel(previous, x, y) : ".";
-        if (old !== pixel) box(21 + x * 2, 24 + y * 2, 2, 2, petColors[pixel]);
+        if (pixel === ".") continue;
+        ink.fillStyle = petColors[pixel];
+        ink.fillRect(x * 2, y * 2, 2, 2);
       }
     });
+    petSprites.set(pose, sprite);
+    return sprite;
+  }
+
+  function paintGithubPet(pose, rise, sparkle) {
+    box(19, 20, 54, 66, petColors["."]);
+    ctx.drawImage(githubPetSprite(pose), 21, 24 - rise);
+    if (sparkle) {
+      const y = 28 - sparkle * 2;
+      box(19, y, 7, 1, "#fff6cb");
+      box(22, y - 3, 1, 7, "#fff6cb");
+    }
   }
 
   function github(data, username, localEpoch, theme) {
@@ -334,7 +353,7 @@ window.createDeskPreview = function createDeskPreview(canvas) {
     previousMode = frameData.mode;
     if (previousMode === "github") {
       github(frameData.github, frameData.githubUsername, frameData.localEpoch, frameData.theme);
-      previousPetPose = undefined;
+      previousPetFrame = undefined;
       render.pet(petElapsed);
       return;
     }
@@ -359,9 +378,15 @@ window.createDeskPreview = function createDeskPreview(canvas) {
     if (!ctx) return;
     if (previousMode !== "github") return;
     const pose = githubPetPose(elapsed);
-    if (pose === previousPetPose) return;
-    paintGithubPet(pose, previousPetPose);
-    previousPetPose = pose;
+    const phase = elapsed % 5600;
+    const breath = Math.round(1 - Math.cos(phase * Math.PI / 1400));
+    const nod = phase >= 2080 && phase < 2450 ? 2 : 0;
+    const rise = Math.min(4, breath + nod);
+    const sparkle = phase >= 2170 && phase < 2590 ? 1 + Math.floor((phase - 2170) / 140) : 0;
+    const frame = `${pose}:${rise}:${sparkle}`;
+    if (frame === previousPetFrame) return;
+    paintGithubPet(pose, rise, sparkle);
+    previousPetFrame = frame;
   };
 
   render.petStep = (delta) => render.pet(petElapsed + delta);

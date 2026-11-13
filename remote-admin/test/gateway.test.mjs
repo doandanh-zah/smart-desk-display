@@ -134,6 +134,7 @@ test('setup is locked and alias GET/HEAD redirects without accepting mutations',
   await expectError(await app(request('/api/auth/login', { base: alias, data: {} })), 403, 'forbidden');
   await expectError(await app(request('/api/admin/state')), 401, 'unauthorized');
   await expectError(await app(request('/app.js')), 401, 'unauthorized');
+  await expectError(await app(request('/solana-devnet.png')), 401, 'unauthorized');
   assert.equal(await (await app(request('/'))).text(), 'login.html');
 });
 
@@ -144,6 +145,9 @@ test('password KDF, strict cookie, CSRF, logout, session persistence and expiry'
   const admin = await login('203.0.113.1');
   const reloaded = gateway();
   assert.equal(await (await reloaded(request('/', { headers: admin }))).text(), 'index.html');
+  const walletQr = await reloaded(request('/solana-devnet.png', { headers: admin }));
+  assert.equal(walletQr.headers.get('content-type'), 'image/png');
+  assert.equal(await walletQr.text(), 'solana-devnet.png');
   assert.equal((await (await reloaded(request('/api/auth/session', { headers: admin }))).json()).authenticated, true);
   await expectError(await reloaded(request('/api/auth/logout', { data: {}, headers: { ...admin, origin: 'https://other.test' } })), 403, 'forbidden');
   await expectError(await reloaded(request('/api/auth/logout', { data: {}, headers: { ...admin, 'x-csrf-token': 'wrong' } })), 403, 'forbidden');
